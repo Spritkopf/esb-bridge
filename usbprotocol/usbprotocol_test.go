@@ -31,7 +31,7 @@ func TestTransfer(t *testing.T) {
 	Open("/dev/ttyACM0")
 
 	pl := []byte{1, 2, 3, 4}
-	ans, err := Transfer(CmdTest, pl)
+	_, ans, err := Transfer(CmdTest, pl)
 
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -47,7 +47,7 @@ func TestTransferMessageTooLong(t *testing.T) {
 
 	pl := make([]byte, 65)
 
-	_, err := Transfer(CmdTest, pl)
+	_, _, err := Transfer(CmdTest, pl)
 
 	_, ok := err.(SizeError)
 	if !ok {
@@ -56,18 +56,48 @@ func TestTransferMessageTooLong(t *testing.T) {
 
 }
 
-// TestMisc is temporary, used to try out stuff during development
-func TestTMisc(t *testing.T) {
+// TestEcho Sends a USB packet and expects an echo messsage back
+func TestEcho(t *testing.T) {
 
 	Open("/dev/ttyACM0")
 
-	ans, err := Transfer(CmdVersion, nil)
+	msg := []byte{5, 19, 20}
+	ans_err, ans_payload, err := Transfer(CmdTest, msg)
 
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	fmt.Printf("Version: %v\n", ans[4:7])
+	if ans_err != 0 {
+		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", ans_err)
+	}
+
+	for i := 0; i < len(msg); i++ {
+		if msg[i] != ans_payload[i] {
+			t.Fatalf("Unexpected answer: Expected:%v , Got:%v", msg, ans_payload)
+		}
+	}
+
+	Close()
+
+}
+
+// TestMisc is temporary, used to try out stuff during development
+func TestMisc(t *testing.T) {
+
+	Open("/dev/ttyACM0")
+
+	ans_err, ans, err := Transfer(CmdVersion, nil)
+
+	if ans_err != 0 {
+		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", ans_err)
+	}
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	fmt.Printf("Version: %v\n", ans)
 	Close()
 
 }

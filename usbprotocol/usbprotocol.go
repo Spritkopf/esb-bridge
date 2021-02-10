@@ -74,9 +74,10 @@ func Close() {
 }
 
 // Transfer sends a message to the usb device and returns the answer
-func Transfer(cmd CommandID, payload []byte) ([]byte, error) {
+// Returnvalues are Answer-ErrorCode, Payload, error
+func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	if len(payload) > MaxPayloadLen {
-		return nil, SizeError(len(payload))
+		return 0, nil, SizeError(len(payload))
 	}
 
 	var txBuf [packetSize]byte
@@ -94,20 +95,24 @@ func Transfer(cmd CommandID, payload []byte) ([]byte, error) {
 
 	// Send the message
 	if err != nil || bytesWritten != len(txBuf) {
-		return nil, err
+		return 0, nil, err
 	}
 
 	// Receive answer
 	var rxBuf [packetSize]byte
 	bytesRead, err := port.Read(rxBuf[:])
 	if err != nil || bytesRead != len(rxBuf) {
-		return nil, err
+		return 0, nil, err
 	}
 
 	// Check answer for errors
 	if rxBuf[1] != txBuf[1] {
 		// Answer command byte must be identical
-		return nil, err
+		return 0, nil, err
+	}
+	answerLen := rxBuf[3]
+	return rxBuf[2], rxBuf[4 : 4+answerLen], nil
+}
 	}
 	return rxBuf[:], nil
 }
