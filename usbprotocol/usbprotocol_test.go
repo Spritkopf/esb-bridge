@@ -3,6 +3,7 @@ package usbprotocol
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 //TestOpenSuccess tests that the virtual COM port can be opened
@@ -52,6 +53,42 @@ func TestTransferMessageTooLong(t *testing.T) {
 	_, ok := err.(SizeError)
 	if !ok {
 		t.Fatalf("Expected Transfer to fail because of too large message parameter, but it didn't")
+	}
+
+}
+
+func TestRegisterCallbackFailed(t *testing.T) {
+	err := RegisterCallback(CmdIrq, nil)
+
+	if err == nil {
+		t.Fatalf("Passing nil as callback should throw an error")
+	}
+}
+
+// TestCallback tests that a registered callback is called
+// Note: This is a manual test, it requires the user to press a button on the board
+func TestCallback(t *testing.T) {
+
+	messageReceived := false
+
+	Open("/dev/ttyACM0")
+	RegisterCallback(CmdIrq, func(err byte, payload []byte) {
+		fmt.Printf("Payload: %v", payload)
+		messageReceived = true
+	})
+	fmt.Printf("Please press the button during the next 60 seconds\n")
+	for i := 10; i > 0; i-- {
+		if messageReceived {
+			break
+		}
+		fmt.Printf("%v\n", i)
+		time.Sleep(1 * time.Second)
+	}
+
+	Close()
+
+	if !messageReceived {
+		t.Fatalf("Timeout, no message was received")
 	}
 
 }

@@ -1,6 +1,7 @@
 package usbprotocol
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/sigurn/crc16"
@@ -45,11 +46,17 @@ const (
 	CmdRx CommandID = 0x81
 )
 
+// IncomingMessageCallback - function prototype for incoming message callbacks
+// When called the function gets passed the error byte of the message and the payload
+type IncomingMessageCallback func(err byte, payload []byte)
+
 /////////////////////////////
 // Package variables (private)
 /////////////////////////////
 var crcTable *crc16.Table
 var port serial.Port
+
+var testCallback IncomingMessageCallback
 
 /////////////////////////////
 // Package API (public)
@@ -113,8 +120,35 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	answerLen := rxBuf[3]
 	return rxBuf[2], rxBuf[4 : 4+answerLen], nil
 }
+
+func waitForMessage() {
+	// Receive answer
+	var rxBuf [packetSize]byte
+
+	bytesRead, err := port.Read(rxBuf[:])
+
+	if err != nil || bytesRead != len(rxBuf) {
+		return
 	}
-	return rxBuf[:], nil
+	answerLen := rxBuf[3]
+	if testCallback != nil {
+		testCallback(rxBuf[1], rxBuf[4:4+answerLen])
+	}
+}
+
+// RegisterCallback registers a function which is called when message with a certain CommandId is incoming
+func RegisterCallback(cmd CommandID, callback IncomingMessageCallback) error {
+
+	if callback == nil {
+		return errors.New("Callback parameter should not be nil")
+	}
+
+	testCallback = callback
+
+	// temporary start reader thread here, should be done in Open()
+	go waitForMessage()
+
+	return nil
 }
 
 //////////////////////////////
