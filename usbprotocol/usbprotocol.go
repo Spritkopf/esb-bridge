@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"encoding/binary"
+
 	"github.com/sigurn/crc16"
 	"go.bug.st/serial.v1"
 )
@@ -16,6 +18,12 @@ const MaxPayloadLen = packetSize - 4 - 2
 
 // sync byte, marks the beginning of a new packet
 const sync = 0x69
+
+const idxSync = 0
+const idxCmd = 1
+const idxErr = 2
+const idxlen = 3
+const idxPayload = 4
 
 ////////////////////////////
 // Type definitions
@@ -46,6 +54,12 @@ const (
 	CmdRx CommandID = 0x81
 )
 
+type message struct {
+	cmd     CommandID
+	err     uint8
+	payload []byte
+}
+
 // IncomingMessageCallback - function prototype for incoming message callbacks
 // When called the function gets passed the error byte of the message and the payload
 type IncomingMessageCallback func(err byte, payload []byte)
@@ -57,6 +71,8 @@ var crcTable *crc16.Table
 var port serial.Port
 
 var testCallback IncomingMessageCallback
+
+var rxChannel chan message
 
 /////////////////////////////
 // Package API (public)
@@ -71,6 +87,12 @@ func Open(device string) error {
 		BaudRate: 115200,
 	}
 	port, err = serial.Open(device, mode)
+
+	if err == nil {
+		// Start reader goroutine, which sends incoming messages on rxChannel
+		rxChannel = make(chan message)
+		go usbReaderThread(rxChannel)
+	}
 
 	return err
 }
@@ -105,20 +127,16 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 		return 0, nil, err
 	}
 
-	// Receive answer
-	var rxBuf [packetSize]byte
-	bytesRead, err := port.Read(rxBuf[:])
-	if err != nil || bytesRead != len(rxBuf) {
-		return 0, nil, err
-	}
+	// Wait for answer
+	answer := <-rxChannel
 
-	// Check answer for errors
-	if rxBuf[1] != txBuf[1] {
+	// check that answer actually matches request (cmdID)
+	if answer.cmd != cmd {
 		// Answer command byte must be identical
 		return 0, nil, err
 	}
-	answerLen := rxBuf[3]
-	return rxBuf[2], rxBuf[4 : 4+answerLen], nil
+
+	return answer.err, answer.payload, nil
 }
 
 func waitForMessage() {
@@ -136,6 +154,43 @@ func waitForMessage() {
 	}
 }
 
+func usbReaderThread(rxChannel chan message) {
+
+	for {
+		var rxBuf [packetSize]byte
+
+		bytesRead, err := port.Read(rxBuf[:])
+
+		// check packet length, must be 64
+		if err != nil || bytesRead != packetSize {
+			continue
+		}
+
+		// check sync byte
+		if rxBuf[idxSync] != sync {
+			continue
+		}
+
+		// check CRC
+		crcCalc := crc16.Checksum(rxBuf[:packetSize-2], crcTable)
+		crcRx := binary.LittleEndian.Uint16(rxBuf[packetSize-2:])
+		if crcCalc != crcRx {
+			continue
+		}
+
+		// Get payload length
+		payloadLen := rxBuf[3]
+
+		// send message to rxChannel
+		rxChannel <- message{
+			cmd:     CommandID(rxBuf[idxCmd]),
+			err:     rxBuf[idxErr],
+			payload: rxBuf[idxPayload : idxPayload+payloadLen]}
+
+		break
+	}
+}
+
 // RegisterCallback registers a function which is called when message with a certain CommandId is incoming
 func RegisterCallback(cmd CommandID, callback IncomingMessageCallback) error {
 
@@ -147,6 +202,7 @@ func RegisterCallback(cmd CommandID, callback IncomingMessageCallback) error {
 
 	// temporary start reader thread here, should be done in Open()
 	go waitForMessage()
+	//go usbReaderThread(rxChannel)
 
 	return nil
 }

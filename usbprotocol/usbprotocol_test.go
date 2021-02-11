@@ -99,19 +99,19 @@ func TestEcho(t *testing.T) {
 	Open("/dev/ttyACM0")
 
 	msg := []byte{5, 19, 20}
-	ans_err, ans_payload, err := Transfer(CmdTest, msg)
+	ansErr, ansPayload, err := Transfer(CmdTest, msg)
 
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	if ans_err != 0 {
-		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", ans_err)
+	if ansErr != 0 {
+		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", ansErr)
 	}
 
 	for i := 0; i < len(msg); i++ {
-		if msg[i] != ans_payload[i] {
-			t.Fatalf("Unexpected answer: Expected:%v , Got:%v", msg, ans_payload)
+		if msg[i] != ansPayload[i] {
+			t.Fatalf("Unexpected answer: Expected:%v , Got:%v", msg, ansPayload)
 		}
 	}
 
@@ -124,17 +124,17 @@ func TestMisc(t *testing.T) {
 
 	Open("/dev/ttyACM0")
 
-	ans_err, ans, err := Transfer(CmdVersion, nil)
+	ansErr, answer, err := Transfer(CmdVersion, nil)
 
-	if ans_err != 0 {
-		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", ans_err)
+	if ansErr != 0 {
+		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", ansErr)
 	}
 
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	fmt.Printf("Version: %v\n", ans)
+	fmt.Printf("Version: %v\n", answer)
 	Close()
 
 }
