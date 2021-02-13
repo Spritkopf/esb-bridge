@@ -27,7 +27,7 @@ func TestOpenFail(t *testing.T) {
 	Close()
 }
 
-// TestTransferMessageTooLong tests the error handling of the Transfer function
+// TestTransferMessageTooLong tests the error handling of the Transfer function when tx payload is too long
 func TestTransferMessageTooLong(t *testing.T) {
 
 	pl := make([]byte, 65)
@@ -116,26 +116,6 @@ func TestEcho(t *testing.T) {
 		}
 	}
 
-	Close()
-
-}
-
-// TestMisc is temporary, used to try out stuff during development
-func TestMisc(t *testing.T) {
-
-	Open("/dev/ttyACM0")
-
-	ansErr, answer, err := Transfer(CmdVersion, nil)
-
-	if ansErr != 0 {
-		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", ansErr)
-	}
-
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-
-	fmt.Printf("Version: %v\n", answer)
 	Close()
 
 }

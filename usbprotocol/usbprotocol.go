@@ -41,18 +41,10 @@ func (f SizeError) Error() string {
 type CommandID uint8
 
 const (
-	// CmdVersion - Get firmware version
-	CmdVersion CommandID = 0x10
-	// CmdTransfer - Send a message, wait for reply
-	CmdTransfer CommandID = 0x30
-	// CmdSend - Send a message without reply
-	CmdSend CommandID = 0x31
-	// CmdTest - test command, do not use
+	// CmdTest - test command, do not use, used for tests
 	CmdTest CommandID = 0x61
-	// CmdIrq - interrupt callback, only from device to host
+	// CmdIrq - interrupt callback, only from device to host, used for tests
 	CmdIrq CommandID = 0x80
-	// CmdRx - callback from incoming ESB message
-	CmdRx CommandID = 0x81
 )
 
 // the message type represents a message which is built out of the incoming byte stream
@@ -115,26 +107,35 @@ func Close() {
 }
 
 // Transfer sends a message to the usb device and returns the answer
+// Params:
+//   cmd - command ID of the transfer
+//   payload - payload to transmit, can be nil for zero TX payload (request-only style commands)
 // Returnvalues are Answer-ErrorCode, Payload, error
 func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	if len(payload) > MaxPayloadLen {
 		return 0, nil, SizeError(len(payload))
 	}
-
 	var txBuf [packetSize]byte
+
 	txBuf[0] = sync
 	txBuf[1] = byte(cmd)
 	txBuf[2] = 0
-	txBuf[3] = byte(len(payload))
-	copy(txBuf[4:], payload[:])
+
+	if payload == nil {
+		txBuf[3] = 0
+	} else {
+		txBuf[3] = byte(len(payload))
+		copy(txBuf[4:], payload[:])
+	}
+
 	crc := crc16.Checksum(txBuf[:len(txBuf)-2], crcTable)
 	var h, l uint8 = uint8(crc & 0xff), uint8(crc >> 8)
 	txBuf[62] = byte(h)
 	txBuf[63] = byte(l)
 
+	// Send the message
 	bytesWritten, err := port.Write(txBuf[:])
 
-	// Send the message
 	if err != nil || bytesWritten != len(txBuf) {
 		return 0, nil, err
 	}
@@ -145,7 +146,7 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	// check that answer actually matches request (cmdID)
 	if answer.cmd != cmd {
 		// Answer command byte must be identical
-		return 0, nil, err
+		return 0, nil, errors.New("Got unexpected Answer (CommandId did not match")
 	}
 
 	return answer.err, answer.payload, nil
