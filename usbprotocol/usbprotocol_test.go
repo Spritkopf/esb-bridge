@@ -24,6 +24,21 @@ func TestOpenFail(t *testing.T) {
 	if err == nil {
 		t.FailNow()
 	}
+	Close()
+}
+
+// TestTransferMessageTooLong tests the error handling of the Transfer function
+func TestTransferMessageTooLong(t *testing.T) {
+
+	pl := make([]byte, 65)
+
+	_, _, err := Transfer(CmdTest, pl)
+
+	_, ok := err.(SizeError)
+	if !ok {
+		t.Fatalf("Expected Transfer to fail because of too large message parameter, but it didn't")
+	}
+
 }
 
 // TestTransfer tests the successful operation of the Transfer function
@@ -40,20 +55,6 @@ func TestTransfer(t *testing.T) {
 
 	fmt.Printf("Answer: %v\n", ans)
 	Close()
-
-}
-
-// TestTransferMessageTooLong tests the error handling of the Transfer function
-func TestTransferMessageTooLong(t *testing.T) {
-
-	pl := make([]byte, 65)
-
-	_, _, err := Transfer(CmdTest, pl)
-
-	_, ok := err.(SizeError)
-	if !ok {
-		t.Fatalf("Expected Transfer to fail because of too large message parameter, but it didn't")
-	}
 
 }
 
