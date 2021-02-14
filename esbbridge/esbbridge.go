@@ -11,6 +11,13 @@ import (
 // Types and constants
 ///////////////////////////////////////////////////////////////////////////////
 
+// AddressSize is the size of the Pipeline addresses (only 5 byte addresses are supported)
+const AddressSize uint8 = 5
+
+// MaxPayloadSize represents the maximum amount of bytes which fit into the payload of an ESB message
+// The maximum payload size is limited to 32 by the implementation of the ESB protocol on the nRF52 uC
+const MaxPayloadSize uint8 = 32
+
 const (
 	// CmdVersion - Get firmware version
 	CmdVersion usbprotocol.CommandID = 0x10
@@ -67,6 +74,34 @@ func GetFwVersion() (string, error) {
 	}
 	versionStr := fmt.Sprintf("%v.%v.%v", answerPayload[0], answerPayload[1], answerPayload[2])
 	return versionStr, nil
+}
+
+// Transfer sends a packet to the target pipeline address and returns the answer
+//
+// Params:
+//   targetAddr - target pipeline address, only 5-byte addresses are supported
+//   payload    - payload to be transmitted, maximum length is 32 (see MaxPayloadSize)
+// Returns a slice of bytes with the answer payload and an error
+func Transfer(targetAddr [AddressSize]byte, payload []byte) ([]byte, error) {
+	if !connected {
+		return nil, errors.New("Device is not connected, call Open() first")
+	}
+
+	if len(payload) > int(MaxPayloadSize) {
+		return nil, fmt.Errorf("Payload too long, maximum is %v", MaxPayloadSize)
+	}
+
+	answerErr, answerPayload, err := usbprotocol.Transfer(CmdTransfer, payload)
+
+	if answerErr != 0 {
+		return nil, fmt.Errorf("ESB Transfer command returned with error code: %02X", answerErr)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return answerPayload, nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////

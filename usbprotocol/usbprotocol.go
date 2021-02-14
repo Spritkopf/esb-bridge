@@ -107,6 +107,7 @@ func Close() {
 }
 
 // Transfer sends a message to the usb device and returns the answer
+//
 // Params:
 //   cmd - command ID of the transfer
 //   payload - payload to transmit, can be nil for zero TX payload (request-only style commands)
@@ -136,8 +137,12 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	// Send the message
 	bytesWritten, err := port.Write(txBuf[:])
 
-	if err != nil || bytesWritten != len(txBuf) {
+	if err != nil {
 		return 0, nil, err
+	}
+
+	if bytesWritten != len(txBuf) {
+		return 0, nil, errors.New("Error writing bytes to serial port")
 	}
 
 	// Wait for answer
