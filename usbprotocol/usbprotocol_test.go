@@ -58,6 +58,38 @@ func TestTransfer(t *testing.T) {
 
 }
 
+// TestTransferInvalidCommand tests the error handling on invalid command ID
+func TestTransferInvalidCommand(t *testing.T) {
+
+	Open("/dev/ttyACM0")
+
+	protocolErr, _, err := Transfer(0xFE, nil)
+
+	if protocolErr != 0x10 {
+		t.Fatalf("Answer message should have the E_NO_CMD Error code when requesting a unknown command")
+	}
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	Close()
+}
+
+// TestTransferTimeout tests the error handling on timeout while waiting for a response from the device
+func TestTransferTimeout(t *testing.T) {
+
+	Open("/dev/ttyACM0")
+
+	_, _, err := Transfer(CmdTest, nil)
+
+	if err == nil {
+		t.Fatalf("Timeout error should be raised")
+	}
+
+	Close()
+}
+
 func TestRegisterCallbackFailed(t *testing.T) {
 	err := RegisterCallback(CmdIrq, nil)
 

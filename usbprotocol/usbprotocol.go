@@ -1,10 +1,10 @@
 package usbprotocol
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
-
-	"encoding/binary"
+	"time"
 
 	"github.com/sigurn/crc16"
 
@@ -16,6 +16,9 @@ const packetSize = 64
 
 // MaxPayloadLen - maximum length of message Payload (64 byte packet - 4 bytes header - 2 bytes crc)
 const MaxPayloadLen = packetSize - 4 - 2
+
+// DefaultTimeout is the default Transfer-timeout in milliseconds waiting for an answer message befor returning an error
+const DefaultTimeout = 500
 
 // sync byte, marks the beginning of a new packet
 const sync = 0x69
@@ -77,6 +80,9 @@ var regCallbackChannel chan callback // Used to register callbacks in the receiv
 /////////////////////////////
 // Package API (public)
 /////////////////////////////
+
+// TimeoutMillis is the timeout in milliseconds used when waiting for an answer in Transfer()
+var TimeoutMillis uint32 = DefaultTimeout
 
 // Open connects to the specified virtual COM port
 // The parameter 'device' holds the name of the device to connect to, i.e. '/dev/ttyACM0'
@@ -145,16 +151,22 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 		return 0, nil, errors.New("Error writing bytes to serial port")
 	}
 
-	// Wait for answer
-	answer := <-ansChannel
+	// Wait for answer or Timeout
+	select {
+	case answer := <-ansChannel:
+		// check that answer actually matches request (cmdID)
+		if answer.cmd != cmd {
+			// Answer command byte must be identical
+			return 0, nil, errors.New("Got unexpected Answer (CommandId did not match")
+		}
 
-	// check that answer actually matches request (cmdID)
-	if answer.cmd != cmd {
-		// Answer command byte must be identical
-		return 0, nil, errors.New("Got unexpected Answer (CommandId did not match")
+		return answer.err, answer.payload, nil
+
+	case <-time.After(time.Duration(TimeoutMillis) * time.Millisecond):
+		// timeout, flush port
+		return 0, nil, errors.New("Timeout waiting for an answer")
 	}
 
-	return answer.err, answer.payload, nil
 }
 
 func receive() {
