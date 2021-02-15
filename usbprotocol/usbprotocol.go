@@ -33,11 +33,30 @@ const idxPayload = 4
 // Type definitions
 ///////////////////////////
 
-// SizeError is returned, when input data is of invalid size (e.g. message payload for transfer)
-type SizeError uint32
+// ErrSize usually is returned when the passed data has the wrong size (too large or too small)
+var ErrSize = UsbError{1, errors.New("ErrSize: Invalid size")}
 
-func (f SizeError) Error() string {
-	return fmt.Sprintf("Size of passed data too large, allowed %v, got %v", MaxPayloadLen, uint32(f))
+// ErrCmdMismatch is returned when the command ID of a received answer doesn't match the request
+var ErrCmdMismatch = UsbError{2, errors.New("ErrCmdMismatch: Unexpected answer command ID")}
+
+// ErrSerial is returned when there is a problem with the serial port
+var ErrSerial = UsbError{3, errors.New("ErrSerial: Error while accessing serial port")}
+
+// ErrTimeout is returned when waiting for an answer timed out
+var ErrTimeout = UsbError{4, errors.New("ErrTimeout: Timout while waiting for answer")}
+
+// ErrParam is returned when a passed parameter is invalid
+var ErrParam = UsbError{5, errors.New("ErrParam: Timout while waiting for answer")}
+
+// UsbError is the general Error type for this package.
+// Member ErrCode is the specific error code to tell them apart
+type UsbError struct {
+	ErrCode int
+	Err     error
+}
+
+func (e UsbError) Error() string {
+	return fmt.Sprintf("%v (%d)", e.Err.Error(), e.ErrCode)
 }
 
 // CommandID - ID of the USB commands
@@ -120,7 +139,7 @@ func Close() {
 // Returnvalues are Answer-ErrorCode, Payload, error
 func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	if len(payload) > MaxPayloadLen {
-		return 0, nil, SizeError(len(payload))
+		return 0, nil, ErrSize
 	}
 	var txBuf [packetSize]byte
 
@@ -148,7 +167,7 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	}
 
 	if bytesWritten != len(txBuf) {
-		return 0, nil, errors.New("Error writing bytes to serial port")
+		return 0, nil, ErrSerial
 	}
 
 	// Wait for answer or Timeout
@@ -157,14 +176,14 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 		// check that answer actually matches request (cmdID)
 		if answer.cmd != cmd {
 			// Answer command byte must be identical
-			return 0, nil, errors.New("Got unexpected Answer (CommandId did not match")
+			return 0, nil, ErrCmdMismatch
 		}
 
 		return answer.err, answer.payload, nil
 
 	case <-time.After(time.Duration(TimeoutMillis) * time.Millisecond):
 		// timeout, flush port
-		return 0, nil, errors.New("Timeout waiting for an answer")
+		return 0, nil, ErrTimeout
 	}
 
 }
@@ -243,7 +262,7 @@ func serialReaderThread() {
 func RegisterCallback(cmd CommandID, cbFunc IncomingMessageCallback) error {
 
 	if cbFunc == nil {
-		return errors.New("Callback parameter should not be nil")
+		return ErrParam
 	}
 
 	regCallbackChannel <- callback{cmd, cbFunc}

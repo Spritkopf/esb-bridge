@@ -3,7 +3,6 @@ package usbprotocol
 import (
 	"fmt"
 	"testing"
-	"time"
 )
 
 //TestOpenSuccess tests that the virtual COM port can be opened
@@ -22,7 +21,7 @@ func TestOpenFail(t *testing.T) {
 	err := Open(("djkdskfj"))
 
 	if err == nil {
-		t.FailNow()
+		t.Fatal(err)
 	}
 	Close()
 }
@@ -30,13 +29,14 @@ func TestOpenFail(t *testing.T) {
 // TestTransferMessageTooLong tests the error handling of the Transfer function when tx payload is too long
 func TestTransferMessageTooLong(t *testing.T) {
 
+	var expectedErrCode = ErrSize.ErrCode
 	pl := make([]byte, 65)
 
 	_, _, err := Transfer(CmdTest, pl)
 
-	_, ok := err.(SizeError)
-	if !ok {
-		t.Fatalf("Expected Transfer to fail because of too large message parameter, but it didn't")
+	e, ok := err.(UsbError)
+	if (!ok) || (e.ErrCode != expectedErrCode) {
+		t.Fatalf("Expected ErrSize (%v), got: %v", expectedErrCode, e)
 	}
 
 }
@@ -79,22 +79,31 @@ func TestTransferInvalidCommand(t *testing.T) {
 // TestTransferTimeout tests the error handling on timeout while waiting for a response from the device
 func TestTransferTimeout(t *testing.T) {
 
-	Open("/dev/ttyACM0")
+	///////////
+	// Manual Test: Uncomment below and run the test manually
+	//////////
 
-	_, _, err := Transfer(CmdTest, nil)
+	// var expectedErrCode = ErrTimeout.ErrCode
+	// Open("/dev/ttyACM0")
 
-	if err == nil {
-		t.Fatalf("Timeout error should be raised")
-	}
+	// _, _, err := Transfer(CmdTest, nil)
 
-	Close()
+	// e, ok := err.(UsbError)
+	// if (!ok) || (e.ErrCode != expectedErrCode) {
+	// 	t.Fatalf("Expected ErrTimeout (%v), got: %v", expectedErrCode, e)
+	// }
+
+	// Close()
 }
 
 func TestRegisterCallbackFailed(t *testing.T) {
+	var expectedErrCode = ErrParam.ErrCode
+
 	err := RegisterCallback(CmdIrq, nil)
 
-	if err == nil {
-		t.Fatalf("Passing nil as callback should throw an error")
+	e, ok := err.(UsbError)
+	if (!ok) || (e.ErrCode != expectedErrCode) {
+		t.Fatalf("Expected ErrParam (%v), got: %v", expectedErrCode, e)
 	}
 }
 
@@ -102,27 +111,31 @@ func TestRegisterCallbackFailed(t *testing.T) {
 // Note: This is a manual test, it requires the user to press a button on the board
 func TestCallback(t *testing.T) {
 
-	messageReceived := false
+	///////////
+	// Manual Test: Uncomment below and run the test manually
+	//////////
 
-	Open("/dev/ttyACM0")
-	RegisterCallback(CmdIrq, func(err byte, payload []byte) {
-		fmt.Printf("Payload: %v", payload)
-		messageReceived = true
-	})
-	fmt.Printf("Please press the button during the next 60 seconds\n")
-	for i := 10; i > 0; i-- {
-		if messageReceived {
-			break
-		}
-		fmt.Printf("%v\n", i)
-		time.Sleep(1 * time.Second)
-	}
+	// messageReceived := false
 
-	Close()
+	// Open("/dev/ttyACM0")
+	// RegisterCallback(CmdIrq, func(err byte, payload []byte) {
+	// 	fmt.Printf("Payload: %v", payload)
+	// 	messageReceived = true
+	// })
+	// fmt.Printf("Please press the button during the next 60 seconds\n")
+	// for i := 10; i > 0; i-- {
+	// 	if messageReceived {
+	// 		break
+	// 	}
+	// 	fmt.Printf("%v\n", i)
+	// 	time.Sleep(1 * time.Second)
+	// }
 
-	if !messageReceived {
-		t.Fatalf("Timeout, no message was received")
-	}
+	// Close()
+
+	// if !messageReceived {
+	// 	t.Fatalf("Timeout, no message was received")
+	// }
 
 }
 
