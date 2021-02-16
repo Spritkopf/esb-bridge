@@ -67,6 +67,8 @@ const (
 	CmdTest CommandID = 0x61
 	// CmdIrq - interrupt callback, only from device to host, used for tests
 	CmdIrq CommandID = 0x80
+	// CmdRx - Rx callback, for async messages from peripheral -> central
+	CmdRx CommandID = 0x81
 )
 
 // the message type represents a message which is built out of the incoming byte stream
@@ -206,7 +208,6 @@ func receive() {
 				if cb.cmd == msg.cmd {
 					cb.cbFunc(msg.err, msg.payload)
 					isAnswer = false
-					break
 				}
 			}
 			if isAnswer {
