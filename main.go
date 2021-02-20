@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -29,7 +31,7 @@ func main() {
 
 	fmt.Printf("Start listening on port %v\n", opts.Port)
 
-	l, err := net.Listen("tcp", ":9815")
+	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", opts.Port))
 	if err != nil {
 		fmt.Println("Error opening TCP socket:", err.Error())
 		os.Exit(1)
@@ -42,8 +44,27 @@ func main() {
 			fmt.Println("Error connecting:", err.Error())
 			return
 		}
-		fmt.Println("Client connected.")
+		log.Println("Client connected.")
 
-		fmt.Println("Client " + c.RemoteAddr().String() + " connected.")
+		log.Println("Client " + c.RemoteAddr().String() + " connected.")
+
+		go handleConnection(c)
+	}
+}
+
+func handleConnection(conn net.Conn) {
+	for {
+		buffer := make([]byte, 10)
+		_, err := io.ReadAtLeast(conn, buffer, 5)
+
+		if err != nil {
+			fmt.Println("Client disconnected.")
+			conn.Close()
+			return
+		}
+
+		log.Println("Client message:", buffer)
+
+		conn.Write(buffer)
 	}
 }
