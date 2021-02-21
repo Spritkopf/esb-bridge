@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/spritkopf/esb-bridge-client/usbprotocol"
+	"github.com/spritkopf/esb-bridge/usbprotocol"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

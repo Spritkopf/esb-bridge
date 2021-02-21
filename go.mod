@@ -1,4 +1,4 @@
-module github.com/spritkopf/esb-bridge-client
+module github.com/spritkopf/esb-bridge
 
 go 1.15
 
