@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/spritkopf/esb-bridge/usbprotocol"
+	"github.com/spritkopf/esb-bridge/internal/usbprotocol"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -65,9 +65,10 @@ var callbacks []callback
 func Open(device string) error {
 	err := usbprotocol.Open(device)
 
-	if err == nil {
-		connected = true
+	if err != nil {
+		return fmt.Errorf("Could not connect to device %v: %v", device, err)
 	}
+	connected = true
 
 	// start listening for all incoming messages with Command ID "CmdRX"
 	err = usbprotocol.RegisterCallback(usbprotocol.CmdRx, rxCallback)

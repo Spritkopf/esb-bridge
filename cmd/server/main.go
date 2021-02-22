@@ -1,5 +1,15 @@
 package main
 
+///////////////////////////////////////////////////////////////////////////////
+// ESB bridge server
+//
+// Provides access to a connected esb-bridge device over a TCP socket
+//
+// Main Features:
+//
+//
+//
+
 import (
 	"fmt"
 	"io"
