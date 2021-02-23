@@ -91,8 +91,9 @@ func main() {
 
 func handleConnection(conn net.Conn) {
 	for {
-		buffer := make([]byte, 2, 64)
-		_, err := io.ReadAtLeast(conn, buffer, 2)
+		buffer := make([]byte, 2)
+		//_, err := io.ReadAtLeast(conn, buffer, 2)
+		_, err := io.ReadFull(conn, buffer)
 
 		if err != nil {
 			fmt.Println("Client disconnected.")
@@ -107,15 +108,19 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 		payloadSize := buffer[1]
-		payload := buffer[2:]
+		payload := make([]byte, int(payloadSize))
+		if payloadSize > 0 {
+			_, err = io.ReadFull(conn, payload)
+		}
 
-		answer := make([]byte, 2, 64)
+		answer := make([]byte, 3, 64)
 		answer[0] = buffer[0] // answer byte 0: same command byte as the request
 		answer[1] = 0         // answer byte 1: error code
 		// check message content
 		switch buffer[0] {
 		// Transfer command
 		case 0x00:
+			log.Println("Transfer payload:", payload)
 			// payload must at least contain the target address and a command
 			if payloadSize < 6 {
 				log.Println("Transfer: Packet too short, need at least 6 bytes (5 address + 1 cmd)")
@@ -130,7 +135,7 @@ func handleConnection(conn net.Conn) {
 					answer[1] = 0x02 // error: transfer error
 				} else {
 					answer[2] = uint8(len(esbAnsPayload))
-					copy(answer[2:], esbAnsPayload[:])
+					answer = append(answer, esbAnsPayload...)
 				}
 
 			}
