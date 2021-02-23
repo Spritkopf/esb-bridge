@@ -6,9 +6,8 @@ package main
 // Provides access to a connected esb-bridge device over a TCP socket
 //
 // Main Features:
-//
-//
-//
+// - transparent communication with the esb-bridge device
+// - setup listeners for arbitrary packets
 
 import (
 	"fmt"
@@ -20,15 +19,28 @@ import (
 	"syscall"
 
 	"github.com/alecthomas/kong"
+	"github.com/spritkopf/esb-bridge/pkg/esbbridge"
 )
 
+const serverVersion string = "0.1.0"
+
 var opts struct {
-	Verbose bool `help:"Additional output"`
-	Port    uint `short:"p" name:"port" default:"9815" help:"TCP port to listen on (default: 9815)"`
+	Verbose bool   `short:"v" help:"Additional output"`
+	Version bool   `name:"version" help:"Print version and exit"`
+	Port    uint   `short:"p" name:"port" default:"9815" help:"TCP port to listen on (default: 9815)"`
+	Device  string `short:"d" name:"device" help:"Serial port of the esb-bridge device (e.g. /dev/ttyACM0)"`
 }
+
+var socket net.Listener
 
 func main() {
 	kong.Parse(&opts)
+
+	// check flag: version
+	if opts.Version {
+		fmt.Printf("esb-bridge-server version %v\n", serverVersion)
+		os.Exit(0)
+	}
 
 	// setup a handler for SIGINT (ctrl+c)
 	c := make(chan os.Signal)
@@ -36,20 +48,35 @@ func main() {
 	go func() {
 		<-c
 		fmt.Println("\n- Received SIGINT (Ctrl+C). Exiting...")
-		os.Exit(0)
+		exit(0)
 	}()
 
-	fmt.Printf("Start listening on port %v\n", opts.Port)
+	err := esbbridge.Open(opts.Device)
+	defer exit(0)
 
-	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", opts.Port))
+	if err != nil {
+		panic(err)
+	}
+
+	fwVersion, err := esbbridge.GetFwVersion()
+	if err != nil {
+		log.Printf("Error: Could not get version information: %v", err)
+		exit(1)
+	}
+
+	log.Printf("Connected to esb-bridge-fw, version: %v\n", fwVersion)
+
+	log.Printf("Start listening on port %v\n", opts.Port)
+
+	socket, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", opts.Port))
 	if err != nil {
 		fmt.Println("Error opening TCP socket:", err.Error())
-		os.Exit(1)
+		exit(1)
 	}
-	defer l.Close()
+	defer socket.Close()
 
 	for {
-		c, err := l.Accept()
+		c, err := socket.Accept()
 		if err != nil {
 			fmt.Println("Error connecting:", err.Error())
 			return
@@ -64,8 +91,8 @@ func main() {
 
 func handleConnection(conn net.Conn) {
 	for {
-		buffer := make([]byte, 10)
-		_, err := io.ReadAtLeast(conn, buffer, 5)
+		buffer := make([]byte, 2, 64)
+		_, err := io.ReadAtLeast(conn, buffer, 2)
 
 		if err != nil {
 			fmt.Println("Client disconnected.")
@@ -75,6 +102,45 @@ func handleConnection(conn net.Conn) {
 
 		log.Println("Client message:", buffer)
 
-		conn.Write(buffer)
+		if len(buffer) < 2 {
+			log.Println("Packet too short, need at least 2 bytes (cmd + len)")
+			continue
+		}
+		payloadSize := buffer[1]
+		payload := buffer[2:]
+
+		answer := make([]byte, 2, 64)
+		answer[0] = buffer[0] // answer byte 0: same command byte as the request
+		answer[1] = 0         // answer byte 1: error code
+		// check message content
+		switch buffer[0] {
+		// Transfer command
+		case 0x00:
+			// payload must at least contain the target address and a command
+			if payloadSize < 6 {
+				log.Println("Transfer: Packet too short, need at least 6 bytes (5 address + 1 cmd)")
+				answer[1] = 0x01 // error: payload size
+			} else {
+				addr := [5]byte{}
+				copy(addr[:5], payload[:5])
+
+				//esbAnsPayload, err := esbbridge.Transfer(addr, payload[5:])
+				esbAnsPayload := buffer
+				if err != nil {
+					answer[1] = 0x02 // error: transfer error
+				} else {
+					answer[2] = uint8(len(esbAnsPayload))
+					copy(answer[2:], esbAnsPayload[:])
+				}
+
+			}
+
+		}
+		conn.Write(answer)
 	}
+}
+
+func exit(errCode int) {
+	esbbridge.Close()
+	os.Exit(errCode)
 }
