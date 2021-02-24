@@ -2,6 +2,7 @@ package esbbridgeclient
 
 import (
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -54,21 +55,20 @@ func Connect(addr string) error {
 //   targetAddr - ESB pipeline address of target device, only 5 bytes address length supported
 //   cmd		- command byte for the ESB message
 //   payload	- payload of the esb message
-func Transfer(targetAddr []byte, cmd byte, payload []byte) error {
+func Transfer(targetAddr []byte, cmd byte, payload []byte) ([]byte, error) {
 	if !connected {
-		return fmt.Errorf("Not connected to server")
+		return nil, fmt.Errorf("Not connected to server")
 	}
 
 	if len(targetAddr) != 5 {
-		return fmt.Errorf("Invalid address length (only 5 byte addresses supported)")
+		return nil, fmt.Errorf("Invalid address length (only 5 byte addresses supported)")
 	}
 
 	packetBuffer := make([]byte, 2, TCPPackageSizeMax)
-	esbPacketBuffer := make([]byte, 7, TCPPackageSizeMax-uint8(len(packetBuffer)))
+	esbPacketBuffer := make([]byte, 6, TCPPackageSizeMax-uint8(len(packetBuffer)))
 
 	copy(esbPacketBuffer[:5], targetAddr)
 	esbPacketBuffer[5] = cmd
-	esbPacketBuffer[6] = uint8(len(payload))
 	esbPacketBuffer = append(esbPacketBuffer, payload...)
 
 	packetBuffer[0] = 0x00
@@ -77,7 +77,26 @@ func Transfer(targetAddr []byte, cmd byte, payload []byte) error {
 
 	connection.Write(packetBuffer)
 
-	return nil
+	answerBuffer := make([]byte, 3)
+	_, err := io.ReadFull(connection, answerBuffer)
+
+	if err != nil {
+		return nil, err
+	}
+
+	answerError := answerBuffer[1]
+
+	if answerError != 0 {
+		return nil, fmt.Errorf("Answer contained error code: %v", answerError)
+	}
+
+	answerPayloadSize := answerBuffer[2]
+	answerPayload := make([]byte, int(answerPayloadSize))
+	if answerPayloadSize > 0 {
+		_, err = io.ReadFull(connection, answerPayload)
+	}
+
+	return answerPayload, nil
 
 }
 
