@@ -1,7 +1,6 @@
 package usbprotocol
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -47,13 +46,32 @@ func TestTransfer(t *testing.T) {
 	Open("/dev/ttyACM0")
 
 	pl := []byte{1, 2, 3, 4}
-	_, ans, err := Transfer(CmdTest, pl)
+	_, _, err := Transfer(CmdTest, pl)
 
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	fmt.Printf("Answer: %v\n", ans)
+	//fmt.Printf("Answer: %v\n", ans)
+
+	Close()
+
+}
+
+// TestTransfer tests the successful tarnsfer of multiple messages in quick succession
+func TestTransferMulti(t *testing.T) {
+
+	Open("/dev/ttyACM0")
+	pl := []byte{1, 2, 3, 4}
+	for i := 0; i < 5; i++ {
+		_, _, err := Transfer(CmdTest, pl)
+
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+
+		//fmt.Printf("Answer %v: %v Err %v\n", i, ans, err)
+	}
 	Close()
 
 }

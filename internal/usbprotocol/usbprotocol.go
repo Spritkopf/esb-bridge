@@ -43,10 +43,10 @@ var ErrCmdMismatch = UsbError{2, errors.New("ErrCmdMismatch: Unexpected answer c
 var ErrSerial = UsbError{3, errors.New("ErrSerial: Error while accessing serial port")}
 
 // ErrTimeout is returned when waiting for an answer timed out
-var ErrTimeout = UsbError{4, errors.New("ErrTimeout: Timout while waiting for answer")}
+var ErrTimeout = UsbError{4, errors.New("ErrTimeout: Timeout while waiting for answer")}
 
 // ErrParam is returned when a passed parameter is invalid
-var ErrParam = UsbError{5, errors.New("ErrParam: Timout while waiting for answer")}
+var ErrParam = UsbError{5, errors.New("ErrParam: Invalid Parameter")}
 
 // UsbError is the general Error type for this package.
 // Member ErrCode is the specific error code to tell them apart
@@ -110,7 +110,7 @@ var TimeoutMillis uint32 = DefaultTimeout
 func Open(device string) error {
 	var err error
 	// Open port in mode 115200_N81
-	c := &serial.Config{Name: device, Baud: 115200}
+	c := &serial.Config{Name: device, Baud: 115200, ReadTimeout: time.Millisecond * 500}
 	port, err = serial.OpenPort(c)
 
 	if err == nil {
@@ -224,9 +224,9 @@ func serialReaderThread() {
 		var rxBuf [packetSize]byte
 
 		if port != nil {
-
 			bytesRead, err := port.Read(rxBuf[:])
-
+			//bytesRead, err := io.ReadAtLeast(port, rxBuf[:], 10)
+			//_, err := io.ReadAtLeast(conn, header, 2)
 			// check packet length, must be 64
 			if err != nil || bytesRead != packetSize {
 				continue
@@ -246,14 +246,12 @@ func serialReaderThread() {
 
 			// Get payload length
 			payloadLen := rxBuf[3]
-
 			// send message to rxChannel
 			rxChannel <- message{
 				cmd:     CommandID(rxBuf[idxCmd]),
 				err:     rxBuf[idxErr],
 				payload: rxBuf[idxPayload : idxPayload+payloadLen]}
 
-			break
 		}
 
 	}
