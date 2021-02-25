@@ -8,8 +8,9 @@ import (
 func TestTemp(t *testing.T) {
 
 	Connect("localhost:9815")
+	var testPipelineAddress = []byte{111, 111, 111, 111, 1}
 
-	fmt.Println(Transfer([]byte{6, 4, 3, 2, 1}, 99, []byte{1, 2, 3}))
+	fmt.Println(Transfer(testPipelineAddress, 0x10, nil))
 	Disconnect()
 
 }

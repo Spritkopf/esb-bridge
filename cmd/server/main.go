@@ -131,9 +131,10 @@ func handleConnection(conn net.Conn) {
 
 				log.Printf("ESB Transfer: Addr %v payload: %v", addr, payload[5:])
 
-				//esbAnsPayload, err := esbbridge.Transfer(addr, payload[5:])
-				esbAnsPayload := payload
+				esbAnsPayload, err := esbbridge.Transfer(addr, payload[5:])
+
 				if err != nil {
+					log.Printf("Tansfer Error: %v", err)
 					answer[1] = 0x02 // error: transfer error
 				} else {
 					answer[2] = uint8(len(esbAnsPayload))

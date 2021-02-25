@@ -1,7 +1,6 @@
 package esbbridge
 
 import (
-	"bytes"
 	"fmt"
 	"testing"
 	"time"
@@ -38,7 +37,7 @@ func TestGetFwVersionNotOpen(t *testing.T) {
 func TestGetFwVersion(t *testing.T) {
 
 	err := Open(testDevice)
-
+	defer Close()
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -50,7 +49,6 @@ func TestGetFwVersion(t *testing.T) {
 	}
 
 	fmt.Printf("Version: %v\n", version)
-	Close()
 
 }
 

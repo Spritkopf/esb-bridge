@@ -54,7 +54,7 @@ func Connect(addr string) error {
 // Params:
 //   targetAddr - ESB pipeline address of target device, only 5 bytes address length supported
 //   cmd		- command byte for the ESB message
-//   payload	- payload of the esb message
+//   payload	- payload of the esb message (can be nil for zero payload, cmd-only message)
 func Transfer(targetAddr []byte, cmd byte, payload []byte) ([]byte, error) {
 	if !connected {
 		return nil, fmt.Errorf("Not connected to server")
