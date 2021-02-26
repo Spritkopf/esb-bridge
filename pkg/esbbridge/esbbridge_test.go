@@ -1,6 +1,7 @@
 package esbbridge
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 	"time"

@@ -88,7 +88,9 @@ func GetFwVersion() (string, error) {
 		return "", errors.New("Device is not connected, call Open() first")
 	}
 
-	answerErr, answerPayload, err := usbprotocol.Transfer(UsbCmdVersion, nil)
+	txMsg := usbprotocol.Message{}
+	txMsg.Cmd = UsbCmdVersion
+	answerErr, answerPayload, err := usbprotocol.Transfer(txMsg)
 
 	if answerErr != 0x00 {
 		return "", fmt.Errorf("Command CmdVersion (0x%02X) returned Error 0x%02X", UsbCmdVersion, answerErr)
@@ -123,10 +125,12 @@ func Transfer(targetAddr [AddressSize]byte, payload []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Payload too short, minimum is 6 (5bytes address, at least 1 byte payload)")
 	}
 
-	txMsg := make([]byte, AddressSize+len(payload))
-	copy(txMsg[0:5], targetAddr[:])
-	copy(txMsg[5:], payload[:])
-	answerErr, answerPayload, err := usbprotocol.Transfer(UsbCmdTransfer, txMsg)
+	txMsg := usbprotocol.Message{}
+	txMsg.Cmd = UsbCmdTransfer
+	txMsg.Payload = append(txMsg.Payload, targetAddr[:]...)
+	txMsg.Payload = append(txMsg.Payload, payload[:]...)
+
+	answerErr, answerPayload, err := usbprotocol.Transfer(txMsg)
 
 	if answerErr != 0 {
 		return nil, fmt.Errorf("ESB Transfer command returned with error code: 0x%02X", answerErr)

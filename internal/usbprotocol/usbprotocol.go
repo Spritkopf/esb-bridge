@@ -71,11 +71,11 @@ const (
 	CmdRx CommandID = 0x81
 )
 
-// the message type represents a message which is built out of the incoming byte stream
-type message struct {
-	cmd     CommandID
-	err     uint8
-	payload []byte
+// Message represents a message which is sent between host and device
+type Message struct {
+	Cmd     CommandID
+	Err     uint8
+	Payload []byte
 }
 
 // the callback type is used by the receive routine to map command IDs to callback functions
@@ -94,8 +94,8 @@ type IncomingMessageCallback func(err byte, payload []byte)
 var crcTable *crc16.Table
 var port *serial.Port
 
-var rxChannel chan message           // Used to pass incoming serial messages from the readerThread to the receive goroutine
-var ansChannel chan message          // Used to pass incoming serial messages as answer from the the receive goroutine to the transfer function
+var rxChannel chan Message           // Used to pass incoming serial messages from the readerThread to the receive goroutine
+var ansChannel chan Message          // Used to pass incoming serial messages as answer from the the receive goroutine to the transfer function
 var regCallbackChannel chan callback // Used to register callbacks in the receive goroutine
 
 /////////////////////////////
@@ -115,8 +115,8 @@ func Open(device string) error {
 
 	if err == nil {
 		// Start reader goroutine, which sends incoming messages on rxChannel
-		rxChannel = make(chan message)
-		ansChannel = make(chan message)
+		rxChannel = make(chan Message)
+		ansChannel = make(chan Message)
 		regCallbackChannel = make(chan callback)
 
 		go serialReaderThread()
@@ -139,21 +139,21 @@ func Close() {
 //   cmd - command ID of the transfer
 //   payload - payload to transmit, can be nil for zero TX payload (request-only style commands)
 // Returnvalues are Answer-ErrorCode, Payload, error
-func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
-	if len(payload) > MaxPayloadLen {
+func Transfer(msg Message) (byte, []byte, error) {
+	if len(msg.Payload) > MaxPayloadLen {
 		return 0, nil, ErrSize
 	}
-	var txBuf [packetSize]byte
+	txBuf := make([]byte, packetSize)
 
 	txBuf[0] = sync
-	txBuf[1] = byte(cmd)
+	txBuf[1] = byte(msg.Cmd)
 	txBuf[2] = 0
 
-	if payload == nil {
+	if msg.Payload == nil {
 		txBuf[3] = 0
 	} else {
-		txBuf[3] = byte(len(payload))
-		copy(txBuf[4:], payload[:])
+		txBuf[3] = byte(len(msg.Payload))
+		copy(txBuf[4:], msg.Payload[:])
 	}
 
 	crc := crc16.Checksum(txBuf[:len(txBuf)-2], crcTable)
@@ -162,7 +162,7 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	txBuf[63] = byte(l)
 
 	// Send the message
-	bytesWritten, err := port.Write(txBuf[:])
+	bytesWritten, err := port.Write(txBuf)
 
 	if err != nil {
 		return 0, nil, err
@@ -176,12 +176,12 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	select {
 	case answer := <-ansChannel:
 		// check that answer actually matches request (cmdID)
-		if answer.cmd != cmd {
+		if answer.Cmd != msg.Cmd {
 			// Answer command byte must be identical
 			return 0, nil, ErrCmdMismatch
 		}
 
-		return answer.err, answer.payload, nil
+		return answer.Err, answer.Payload, nil
 
 	case <-time.After(time.Duration(TimeoutMillis) * time.Millisecond):
 		// timeout, flush port
@@ -189,6 +189,22 @@ func Transfer(cmd CommandID, payload []byte) (byte, []byte, error) {
 	}
 
 }
+
+// RegisterCallback registers a function which is called when message with a certain CommandId is incoming
+func RegisterCallback(cmd CommandID, cbFunc IncomingMessageCallback) error {
+
+	if cbFunc == nil {
+		return ErrParam
+	}
+
+	regCallbackChannel <- callback{cmd, cbFunc}
+
+	return nil
+}
+
+//////////////////////////////
+// Internal functions (private)
+//////////////////////////////
 
 func receive() {
 	var callbacks []callback
@@ -205,8 +221,8 @@ func receive() {
 			isAnswer := true
 			// message received, look if a callback is registered
 			for _, cb := range callbacks {
-				if cb.cmd == msg.cmd {
-					cb.cbFunc(msg.err, msg.payload)
+				if cb.cmd == msg.Cmd {
+					cb.cbFunc(msg.Err, msg.Payload)
 					isAnswer = false
 				}
 			}
@@ -247,31 +263,15 @@ func serialReaderThread() {
 			// Get payload length
 			payloadLen := rxBuf[3]
 			// send message to rxChannel
-			rxChannel <- message{
-				cmd:     CommandID(rxBuf[idxCmd]),
-				err:     rxBuf[idxErr],
-				payload: rxBuf[idxPayload : idxPayload+payloadLen]}
+			rxChannel <- Message{
+				Cmd:     CommandID(rxBuf[idxCmd]),
+				Err:     rxBuf[idxErr],
+				Payload: rxBuf[idxPayload : idxPayload+payloadLen]}
 
 		}
 
 	}
 }
-
-// RegisterCallback registers a function which is called when message with a certain CommandId is incoming
-func RegisterCallback(cmd CommandID, cbFunc IncomingMessageCallback) error {
-
-	if cbFunc == nil {
-		return ErrParam
-	}
-
-	regCallbackChannel <- callback{cmd, cbFunc}
-
-	return nil
-}
-
-//////////////////////////////
-// Internal functions (private)
-//////////////////////////////
 
 func init() {
 	// create crc16 table
