@@ -32,7 +32,7 @@ func TestTransferMessageTooLong(t *testing.T) {
 	pl := make([]byte, 65)
 
 	msg := Message{Cmd: CmdTest, Payload: pl}
-	_, _, err := Transfer(msg)
+	_, err := Transfer(msg)
 
 	e, ok := err.(UsbError)
 	if (!ok) || (e.ErrCode != expectedErrCode) {
@@ -48,7 +48,7 @@ func TestTransfer(t *testing.T) {
 
 	pl := []byte{1, 2, 3, 4}
 	msg := Message{Cmd: CmdTest, Payload: pl}
-	_, _, err := Transfer(msg)
+	_, err := Transfer(msg)
 
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -67,13 +67,13 @@ func TestTransferMulti(t *testing.T) {
 	pl := []byte{1, 2, 3, 4}
 	msg := Message{Cmd: CmdTest, Payload: pl}
 	for i := 0; i < 5; i++ {
-		_, _, err := Transfer(msg)
+		_, err := Transfer(msg)
 
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
 
-		//fmt.Printf("Answer %v: %v Err %v\n", i, ans, err)
+		//fmt.Printf("Answer %v: %v Err %v\n", i, ans.Payload, ans.Err)
 	}
 	Close()
 
@@ -85,9 +85,9 @@ func TestTransferInvalidCommand(t *testing.T) {
 	Open("/dev/ttyACM0")
 
 	msg := Message{Cmd: 0xFE, Payload: nil}
-	protocolErr, _, err := Transfer(msg)
+	answer, err := Transfer(msg)
 
-	if protocolErr != 0x10 {
+	if answer.Err != 0x10 {
 		t.Fatalf("Answer message should have the E_NO_CMD Error code when requesting a unknown command")
 	}
 
@@ -168,19 +168,19 @@ func TestEcho(t *testing.T) {
 
 	pl := []byte{5, 19, 20}
 	msg := Message{Cmd: CmdTest, Payload: pl}
-	ansErr, ansPayload, err := Transfer(msg)
+	answer, err := Transfer(msg)
 
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	if ansErr != 0 {
-		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", ansErr)
+	if answer.Err != 0 {
+		t.Fatalf("Unexpected answer Error Code: Expected:0 , Got:%v", answer.Err)
 	}
 
 	for i := 0; i < len(pl); i++ {
-		if pl[i] != ansPayload[i] {
-			t.Fatalf("Unexpected answer: Expected:%v , Got:%v", msg, ansPayload)
+		if pl[i] != answer.Payload[i] {
+			t.Fatalf("Unexpected answer: Expected:%v , Got:%v", msg, answer.Payload)
 		}
 	}
 

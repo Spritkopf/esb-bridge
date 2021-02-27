@@ -136,12 +136,11 @@ func Close() {
 // Transfer sends a message to the usb device and returns the answer
 //
 // Params:
-//   cmd - command ID of the transfer
-//   payload - payload to transmit, can be nil for zero TX payload (request-only style commands)
-// Returnvalues are Answer-ErrorCode, Payload, error
-func Transfer(msg Message) (byte, []byte, error) {
+//   msg - The messge to be transmitted (payload can be nil for zero TX payload (request-only style commands))
+// Returns: answer message, error
+func Transfer(msg Message) (Message, error) {
 	if len(msg.Payload) > MaxPayloadLen {
-		return 0, nil, ErrSize
+		return Message{}, ErrSize
 	}
 	txBuf := make([]byte, packetSize)
 
@@ -165,11 +164,11 @@ func Transfer(msg Message) (byte, []byte, error) {
 	bytesWritten, err := port.Write(txBuf)
 
 	if err != nil {
-		return 0, nil, err
+		return Message{}, err
 	}
 
 	if bytesWritten != len(txBuf) {
-		return 0, nil, ErrSerial
+		return Message{}, ErrSerial
 	}
 
 	// Wait for answer or Timeout
@@ -178,14 +177,13 @@ func Transfer(msg Message) (byte, []byte, error) {
 		// check that answer actually matches request (cmdID)
 		if answer.Cmd != msg.Cmd {
 			// Answer command byte must be identical
-			return 0, nil, ErrCmdMismatch
+			return Message{}, ErrCmdMismatch
 		}
-
-		return answer.Err, answer.Payload, nil
+		return answer, nil
 
 	case <-time.After(time.Duration(TimeoutMillis) * time.Millisecond):
 		// timeout, flush port
-		return 0, nil, ErrTimeout
+		return Message{}, ErrTimeout
 	}
 
 }
