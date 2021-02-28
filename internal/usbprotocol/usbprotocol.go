@@ -188,9 +188,9 @@ func Transfer(msg Message) (Message, error) {
 func AddListener(cmd CommandID, c listenerChannel) error {
 
 	// If a listener for this command was already registered, just add the channel to it
-	for _, l := range listeners {
+	for i, l := range listeners {
 		if l.cmd == cmd {
-			l.channels = append(l.channels, c)
+			listeners[i].channels = append(listeners[i].channels, c)
 			return nil
 		}
 	}

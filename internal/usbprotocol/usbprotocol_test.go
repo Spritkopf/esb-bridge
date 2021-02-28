@@ -1,7 +1,9 @@
 package usbprotocol
 
 import (
+	"fmt"
 	"testing"
+	"time"
 )
 
 //TestOpenSuccess tests that the virtual COM port can be opened
@@ -153,6 +155,58 @@ func TestListener(t *testing.T) {
 	// 	if !messageReceived {
 	// 		t.Fatalf("Timeout, no message was received")
 	// 	}
+
+}
+
+// TestMultipleListeners tests that multiple listener channels registered for the same message all rceive the message
+// Note: This is a manual test, it requires the user to press a button on the board
+func TestMultipleListeners(t *testing.T) {
+
+	///////////
+	// Manual Test: Uncomment below and run the test manually
+	//////////
+
+	messageReceived1 := false
+	messageReceived2 := false
+
+	Open("/dev/ttyACM0")
+
+	lc1 := make(chan Message, 1)
+	lc2 := make(chan Message, 1)
+
+	AddListener(CmdIrq, lc1)
+	AddListener(CmdIrq, lc2)
+
+	fmt.Printf("Please press the button during the next 60 seconds\n")
+
+	go func() {
+		msg := <-lc1
+		fmt.Printf("Message received1: %v\n", msg)
+		messageReceived1 = true
+		return
+	}()
+	go func() {
+		msg := <-lc2
+		fmt.Printf("Message received2: %v\n", msg)
+		messageReceived2 = true
+		return
+	}()
+
+timeoutLoop:
+	for i := 10; i > 0; i-- {
+		time.Sleep(1 * time.Second)
+		fmt.Printf("%v\n", i)
+
+		if messageReceived1 && messageReceived2 {
+			break timeoutLoop
+		}
+	}
+
+	Close()
+
+	if !messageReceived1 || !messageReceived2 {
+		t.Fatalf("Timeout, not all messages were received")
+	}
 
 }
 
