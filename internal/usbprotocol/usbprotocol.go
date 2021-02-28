@@ -78,15 +78,12 @@ type Message struct {
 	Payload []byte
 }
 
-// the callback type is used by the receive routine to map command IDs to callback functions
-type callback struct {
-	cmd    CommandID
-	cbFunc IncomingMessageCallback
-}
+type listenerChannel chan<- Message
 
-// IncomingMessageCallback - function prototype for incoming message callbacks
-// When called the function gets passed the error byte of the message and the payload
-type IncomingMessageCallback func(err byte, payload []byte)
+type listener struct {
+	cmd      CommandID
+	channels []listenerChannel
+}
 
 /////////////////////////////
 // Package variables (private)
@@ -94,9 +91,9 @@ type IncomingMessageCallback func(err byte, payload []byte)
 var crcTable *crc16.Table
 var port *serial.Port
 
-var rxChannel chan Message           // Used to pass incoming serial messages from the readerThread to the receive goroutine
-var ansChannel chan Message          // Used to pass incoming serial messages as answer from the the receive goroutine to the transfer function
-var regCallbackChannel chan callback // Used to register callbacks in the receive goroutine
+var rxChannel chan Message  // Used to pass incoming serial messages from the readerThread to the receive goroutine
+var ansChannel chan Message // Used to pass incoming serial messages as answer from the the receive goroutine to the transfer function
+var listeners []listener    // Stores callback channels associated to command IDs to listen for
 
 /////////////////////////////
 // Package API (public)
@@ -117,10 +114,8 @@ func Open(device string) error {
 		// Start reader goroutine, which sends incoming messages on rxChannel
 		rxChannel = make(chan Message)
 		ansChannel = make(chan Message)
-		regCallbackChannel = make(chan callback)
 
 		go serialReaderThread()
-		go receive()
 	}
 
 	return err
@@ -188,49 +183,27 @@ func Transfer(msg Message) (Message, error) {
 
 }
 
-// RegisterCallback registers a function which is called when message with a certain CommandId is incoming
-func RegisterCallback(cmd CommandID, cbFunc IncomingMessageCallback) error {
+// AddListener adds a listenener for the provided command. Any incoming message with this CommandID will
+// sent to the provided channel
+func AddListener(cmd CommandID, c listenerChannel) error {
 
-	if cbFunc == nil {
-		return ErrParam
+	// If a listener for this command was already registered, just add the channel to it
+	for _, l := range listeners {
+		if l.cmd == cmd {
+			l.channels = append(l.channels, c)
+			return nil
+		}
 	}
 
-	regCallbackChannel <- callback{cmd, cbFunc}
-
+	// If no listener for this command is already registered, create it
+	l := listener{cmd: cmd, channels: []listenerChannel{c}}
+	listeners = append(listeners, l)
 	return nil
 }
 
 //////////////////////////////
 // Internal functions (private)
 //////////////////////////////
-
-func receive() {
-	var callbacks []callback
-
-	for {
-		select {
-		case tempCallback := <-regCallbackChannel:
-			// register callback, add to callbacks list if function is valid
-			if tempCallback.cbFunc != nil {
-				callbacks = append(callbacks, tempCallback)
-			}
-
-		case msg := <-rxChannel:
-			isAnswer := true
-			// message received, look if a callback is registered
-			for _, cb := range callbacks {
-				if cb.cmd == msg.Cmd {
-					cb.cbFunc(msg.Err, msg.Payload)
-					isAnswer = false
-				}
-			}
-			if isAnswer {
-				ansChannel <- msg
-			}
-		}
-	}
-
-}
 
 func serialReaderThread() {
 
@@ -260,12 +233,26 @@ func serialReaderThread() {
 
 			// Get payload length
 			payloadLen := rxBuf[3]
-			// send message to rxChannel
-			rxChannel <- Message{
+
+			answerMessage := Message{
 				Cmd:     CommandID(rxBuf[idxCmd]),
 				Err:     rxBuf[idxErr],
 				Payload: rxBuf[idxPayload : idxPayload+payloadLen]}
 
+			isAnswer := true
+			// message received, look if a listener is registered
+			for _, l := range listeners {
+				if l.cmd == answerMessage.Cmd {
+					// listener found, send message to all associated channels
+					for _, c := range l.channels {
+						c <- answerMessage
+					}
+					isAnswer = false
+				}
+			}
+			if isAnswer {
+				ansChannel <- answerMessage
+			}
 		}
 
 	}

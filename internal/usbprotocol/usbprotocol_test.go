@@ -118,46 +118,41 @@ func TestTransferTimeout(t *testing.T) {
 	// Close()
 }
 
-func TestRegisterCallbackFailed(t *testing.T) {
-	var expectedErrCode = ErrParam.ErrCode
-
-	err := RegisterCallback(CmdIrq, nil)
-
-	e, ok := err.(UsbError)
-	if (!ok) || (e.ErrCode != expectedErrCode) {
-		t.Fatalf("Expected ErrParam (%v), got: %v", expectedErrCode, e)
-	}
-}
-
-// TestCallback tests that a registered callback is called
+// TestListener tests that a Listener channel receives its desired message
 // Note: This is a manual test, it requires the user to press a button on the board
-func TestCallback(t *testing.T) {
+func TestListener(t *testing.T) {
 
 	///////////
 	// Manual Test: Uncomment below and run the test manually
 	//////////
 
-	// messageReceived := false
+	// 	messageReceived := false
 
-	// Open("/dev/ttyACM0")
-	// RegisterCallback(CmdIrq, func(err byte, payload []byte) {
-	// 	fmt.Printf("Payload: %v", payload)
-	// 	messageReceived = true
-	// })
-	// fmt.Printf("Please press the button during the next 60 seconds\n")
-	// for i := 10; i > 0; i-- {
-	// 	if messageReceived {
-	// 		break
+	// 	Open("/dev/ttyACM0")
+
+	// 	lc := make(chan Message, 1)
+
+	// 	AddListener(CmdIrq, lc)
+
+	// 	fmt.Printf("Please press the button during the next 60 seconds\n")
+
+	// timeoutLoop:
+	// 	for i := 10; i > 0; i-- {
+	// 		select {
+	// 		case msg := <-lc:
+	// 			fmt.Printf("Message received: %v", msg)
+	// 			messageReceived = true
+	// 			break timeoutLoop
+	// 		case <-time.After(1 * time.Second):
+	// 			fmt.Printf("%v\n", i)
+	// 		}
 	// 	}
-	// 	fmt.Printf("%v\n", i)
-	// 	time.Sleep(1 * time.Second)
-	// }
 
-	// Close()
+	// 	Close()
 
-	// if !messageReceived {
-	// 	t.Fatalf("Timeout, no message was received")
-	// }
+	// 	if !messageReceived {
+	// 		t.Fatalf("Timeout, no message was received")
+	// 	}
 
 }
 
