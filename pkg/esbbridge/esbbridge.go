@@ -70,8 +70,11 @@ func Open(device string) error {
 	}
 	connected = true
 
-	// start listening for all incoming messages with Command ID "CmdRX"
-	err = usbprotocol.RegisterCallback(usbprotocol.CmdRx, rxCallback)
+	rxChannel := make(chan usbprotocol.Message, 5)
+	// start listening for all incoming messages with Command ID "CmdRx"
+	err = usbprotocol.AddListener(usbprotocol.CmdRx, rxChannel)
+
+	go rxCallbackThread(rxChannel)
 
 	return err
 }
@@ -90,16 +93,16 @@ func GetFwVersion() (string, error) {
 
 	txMsg := usbprotocol.Message{}
 	txMsg.Cmd = UsbCmdVersion
-	answerErr, answerPayload, err := usbprotocol.Transfer(txMsg)
+	answerMessage, err := usbprotocol.Transfer(txMsg)
 
-	if answerErr != 0x00 {
-		return "", fmt.Errorf("Command CmdVersion (0x%02X) returned Error 0x%02X", UsbCmdVersion, answerErr)
+	if answerMessage.Err != 0x00 {
+		return "", fmt.Errorf("Command CmdVersion (0x%02X) returned Error 0x%02X", UsbCmdVersion, answerMessage.Err)
 	}
 
 	if err != nil {
 		return "", err
 	}
-	versionStr := fmt.Sprintf("%v.%v.%v", answerPayload[0], answerPayload[1], answerPayload[2])
+	versionStr := fmt.Sprintf("%v.%v.%v", answerMessage.Payload[0], answerMessage.Payload[1], answerMessage.Payload[2])
 	return versionStr, nil
 }
 
@@ -130,17 +133,17 @@ func Transfer(targetAddr [AddressSize]byte, payload []byte) ([]byte, error) {
 	txMsg.Payload = append(txMsg.Payload, targetAddr[:]...)
 	txMsg.Payload = append(txMsg.Payload, payload[:]...)
 
-	answerErr, answerPayload, err := usbprotocol.Transfer(txMsg)
+	answerMessage, err := usbprotocol.Transfer(txMsg)
 
-	if answerErr != 0 {
-		return nil, fmt.Errorf("ESB Transfer command returned with error code: 0x%02X", answerErr)
+	if answerMessage.Err != 0 {
+		return nil, fmt.Errorf("ESB Transfer command returned with error code: 0x%02X", answerMessage.Err)
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	return answerPayload, nil
+	return answerMessage.Payload, nil
 }
 
 // RegisterCallback registers a callback function to call when a specific message arrives
@@ -161,29 +164,33 @@ func RegisterCallback(sourceAddr [AddressSize]byte, cmd byte, callbackFunc EsbRx
 // Private functions
 ///////////////////////////////////////////////////////////////////////////////
 
-func rxCallback(msgErr byte, usbPayload []byte) {
+func rxCallbackThread(ch chan usbprotocol.Message) {
 
-	// message error is discarded for CmdRx, should always be OK
+	for {
+		usbMsg := <-ch
 
-	// check payload size, must at least contain a source address and a cmd ID
-	if len(usbPayload) < 6 {
-		return
-	}
+		// message error is discarded for CmdRx, should always be OK
 
-	message := EsbMessage{}
+		// check payload size, must at least contain a source address (5 bytes) and a cmd ID
+		if len(usbMsg.Payload) < 6 {
+			return
+		}
 
-	message.address = usbPayload[:5]
-	message.cmd = usbPayload[5]
+		message := EsbMessage{}
 
-	if len(usbPayload) > 6 {
-		message.payload = usbPayload[6:]
-	}
+		message.address = usbMsg.Payload[:5]
+		message.cmd = usbMsg.Payload[5]
 
-	// go through all registered callbacks, check if the cmd ID matches (or is ignored) and the source address matches (or is ignored)
-	for _, cb := range callbacks {
-		if ((cb.cmd == 0xFF) || (cb.cmd == message.cmd)) &&
-			((bytes.Compare(cb.sourceAddr[:], message.address) == 0) || (bytes.Compare(cb.sourceAddr[:], make([]byte, 5)) == 0)) {
-			cb.cbFunc(message)
+		if len(usbMsg.Payload) > 6 {
+			message.payload = usbMsg.Payload[6:]
+		}
+
+		// go through all registered callbacks, check if the cmd ID matches (or is ignored) and the source address matches (or is ignored)
+		for _, cb := range callbacks {
+			if ((cb.cmd == 0xFF) || (cb.cmd == message.cmd)) &&
+				((bytes.Compare(cb.sourceAddr[:], message.address) == 0) || (bytes.Compare(cb.sourceAddr[:], make([]byte, 5)) == 0)) {
+				cb.cbFunc(message)
+			}
 		}
 	}
 }

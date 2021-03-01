@@ -1,7 +1,9 @@
 package usbprotocol
 
 import (
+	"fmt"
 	"testing"
+	"time"
 )
 
 //TestOpenSuccess tests that the virtual COM port can be opened
@@ -133,37 +135,37 @@ func TestListenerInvalidParam(t *testing.T) {
 // Note: This is a manual test, it requires the user to press a button on the board
 func TestListener(t *testing.T) {
 
-	///////////
-	// Manual Test: Uncomment below and run the test manually
-	//////////
+	/////////
+	//Manual Test: Uncomment below and run the test manually
+	////////
 
-	// 	messageReceived := false
+	messageReceived := false
 
-	// 	Open("/dev/ttyACM0")
+	Open("/dev/ttyACM0")
 
-	// 	lc := make(chan Message, 1)
+	lc := make(chan Message, 1)
 
-	// 	AddListener(CmdIrq, lc)
+	AddListener(CmdIrq, lc)
 
-	// 	fmt.Printf("Please press the button during the next 60 seconds\n")
+	fmt.Printf("Please press the button during the next 60 seconds\n")
 
-	// timeoutLoop:
-	// 	for i := 10; i > 0; i-- {
-	// 		select {
-	// 		case msg := <-lc:
-	// 			fmt.Printf("Message received: %v", msg)
-	// 			messageReceived = true
-	// 			break timeoutLoop
-	// 		case <-time.After(1 * time.Second):
-	// 			fmt.Printf("%v\n", i)
-	// 		}
-	// 	}
+timeoutLoop:
+	for i := 10; i > 0; i-- {
+		select {
+		case msg := <-lc:
+			fmt.Printf("Message received: %v", msg)
+			messageReceived = true
+			break timeoutLoop
+		case <-time.After(1 * time.Second):
+			fmt.Printf("%v\n", i)
+		}
+	}
 
-	// 	Close()
+	Close()
 
-	// 	if !messageReceived {
-	// 		t.Fatalf("Timeout, no message was received")
-	// 	}
+	if !messageReceived {
+		t.Fatalf("Timeout, no message was received")
+	}
 
 }
 

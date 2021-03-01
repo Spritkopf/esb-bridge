@@ -120,7 +120,7 @@ func TestCallback(t *testing.T) {
 	Open("/dev/ttyACM0")
 	defer Close()
 
-	RegisterCallback([5]byte{0xDE, 0xAD, 0xBE, 0xEF, 0x02}, 0xFF, func(message EsbMessage) {
+	RegisterCallback([5]byte{12, 13, 14, 15, 16}, 4, func(message EsbMessage) {
 		fmt.Println(message)
 		messageReceived = true
 	})
