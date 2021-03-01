@@ -187,6 +187,10 @@ func Transfer(msg Message) (Message, error) {
 // sent to the provided channel
 func AddListener(cmd CommandID, c listenerChannel) error {
 
+	if c == nil {
+		return ErrParam
+	}
+
 	listeners = append(listeners, listener{cmd: cmd, channel: c})
 
 	return nil
