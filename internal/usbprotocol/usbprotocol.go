@@ -78,11 +78,11 @@ type Message struct {
 	Payload []byte
 }
 
-type listenerChannel chan<- Message
+type listenerChannel chan<- Message // listenerChannel is send-only
 
 type listener struct {
-	cmd      CommandID
-	channels []listenerChannel
+	cmd     CommandID
+	channel listenerChannel
 }
 
 /////////////////////////////
@@ -187,17 +187,8 @@ func Transfer(msg Message) (Message, error) {
 // sent to the provided channel
 func AddListener(cmd CommandID, c listenerChannel) error {
 
-	// If a listener for this command was already registered, just add the channel to it
-	for i, l := range listeners {
-		if l.cmd == cmd {
-			listeners[i].channels = append(listeners[i].channels, c)
-			return nil
-		}
-	}
+	listeners = append(listeners, listener{cmd: cmd, channel: c})
 
-	// If no listener for this command is already registered, create it
-	l := listener{cmd: cmd, channels: []listenerChannel{c}}
-	listeners = append(listeners, l)
 	return nil
 }
 
@@ -212,8 +203,7 @@ func serialReaderThread() {
 
 		if port != nil {
 			bytesRead, err := port.Read(rxBuf[:])
-			//bytesRead, err := io.ReadAtLeast(port, rxBuf[:], 10)
-			//_, err := io.ReadAtLeast(conn, header, 2)
+
 			// check packet length, must be 64
 			if err != nil || bytesRead != packetSize {
 				continue
@@ -243,10 +233,7 @@ func serialReaderThread() {
 			// message received, look if a listener is registered
 			for _, l := range listeners {
 				if l.cmd == answerMessage.Cmd {
-					// listener found, send message to all associated channels
-					for _, c := range l.channels {
-						c <- answerMessage
-					}
+					l.channel <- answerMessage
 					isAnswer = false
 				}
 			}
