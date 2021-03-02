@@ -30,17 +30,6 @@ const (
 	UsbCmdRx usbprotocol.CommandID = 0x81
 )
 
-// EsbRxMessageCallback - function prototype for incoming message callbacks
-// When called the function gets passed the error byte of the origin of the message (source address), command byte, and the payload
-type EsbRxMessageCallback func(EsbMessage)
-
-// the callback type is used by the receive routine to map command IDs to callback functions
-type callback struct {
-	sourceAddr [AddressSize]byte
-	cmd        byte
-	cbFunc     EsbRxMessageCallback
-}
-
 // EsbMessage is the data type representing a message sent between esb devices
 type EsbMessage struct {
 	address []byte
@@ -48,13 +37,20 @@ type EsbMessage struct {
 	payload []byte
 }
 
+type listener struct {
+	sourceAddr [AddressSize]byte
+	cmd        byte
+	channel    listenerChannel
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Private variables
 ///////////////////////////////////////////////////////////////////////////////
 
 var connected bool = false
-var callbacks []callback
+var listeners []listener // Stores callback channels associated to commandIDs and addresses to listen for
 
+type listenerChannel chan<- EsbMessage // listenerChannel is send-only
 ///////////////////////////////////////////////////////////////////////////////
 // Public API
 ///////////////////////////////////////////////////////////////////////////////
@@ -146,16 +142,17 @@ func Transfer(targetAddr [AddressSize]byte, payload []byte) ([]byte, error) {
 	return answerMessage.Payload, nil
 }
 
-// RegisterCallback registers a callback function to call when a specific message arrives
+// AddListener adds a listenener. Any incoming message with this CommandID and/or address will be redirected to c
 // Params:
 //   sourceAddr - only messages from this sender will be evaluated, an empty array is used to ignore this filter (all senders will be evaluated)
 //   cmd        - only messages with a specific cmd byte (the 1st payload byte) will be evaluated, set to 0xFF to ignore the filter (all message IDs will be evaluated)
-func RegisterCallback(sourceAddr [AddressSize]byte, cmd byte, callbackFunc EsbRxMessageCallback) error {
+func AddListener(sourceAddr [AddressSize]byte, cmd byte, c listenerChannel) error {
 
-	if callbackFunc == nil {
-		return errors.New("invalid parameter passed for callbackFunc")
+	if c == nil {
+		return errors.New("invalid parameter passed for listener channel (nil)")
 	}
-	callbacks = append(callbacks, callback{sourceAddr, cmd, callbackFunc})
+
+	listeners = append(listeners, listener{sourceAddr: sourceAddr, cmd: cmd, channel: c})
 
 	return nil
 }
@@ -185,11 +182,11 @@ func rxCallbackThread(ch chan usbprotocol.Message) {
 			message.payload = usbMsg.Payload[6:]
 		}
 
-		// go through all registered callbacks, check if the cmd ID matches (or is ignored) and the source address matches (or is ignored)
-		for _, cb := range callbacks {
-			if ((cb.cmd == 0xFF) || (cb.cmd == message.cmd)) &&
-				((bytes.Compare(cb.sourceAddr[:], message.address) == 0) || (bytes.Compare(cb.sourceAddr[:], make([]byte, 5)) == 0)) {
-				cb.cbFunc(message)
+		// send message to all registered and matching listeners
+		for _, l := range listeners {
+			if ((l.cmd == 0xFF) || (l.cmd == message.cmd)) &&
+				((bytes.Compare(l.sourceAddr[:], message.address) == 0) || (bytes.Compare(l.sourceAddr[:], make([]byte, 5)) == 0)) {
+				l.channel <- message
 			}
 		}
 	}

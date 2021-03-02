@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
-	"time"
 )
 
 var testPipelineAddress = [5]byte{111, 111, 111, 111, 1}
@@ -114,27 +113,43 @@ func TestTransfer(t *testing.T) {
 	Close()
 }
 
-func TestCallback(t *testing.T) {
-	messageReceived := false
+// TestListenerInvalidParam tests that Addlistener will return an error if an invalid channel parameter (nil) is passed
+func TestListenerInvalidParam(t *testing.T) {
 
-	Open("/dev/ttyACM0")
-	defer Close()
+	err := AddListener([5]byte{}, 0, nil)
 
-	RegisterCallback([5]byte{12, 13, 14, 15, 16}, 4, func(message EsbMessage) {
-		fmt.Println(message)
-		messageReceived = true
-	})
-
-	for i := 10; i > 0; i-- {
-		if messageReceived {
-			break
-		}
-		fmt.Printf("%v\n", i)
-		time.Sleep(1 * time.Second)
+	if err == nil {
+		t.Fatalf("AddListener should return an error if nil is passed as channel")
 	}
-	if !messageReceived {
-		t.Fatalf("Timeout, no message was received")
-	}
+}
+
+// TestListener checks that incoming messages can be received
+// This is a manual test as it requires a device to send a message
+func TestListener(t *testing.T) {
+	// 	messageReceived := false
+
+	// 	Open("/dev/ttyACM0")
+	// 	defer Close()
+
+	// 	lc := make(chan EsbMessage, 1)
+
+	// 	AddListener([5]byte{12, 13, 14, 15, 16}, 0xFF, lc)
+
+	// timeoutLoop:
+	// 	for i := 10; i > 0; i-- {
+	// 		select {
+	// 		case msg := <-lc:
+	// 			fmt.Printf("Message received: %v", msg)
+	// 			messageReceived = true
+	// 			break timeoutLoop
+	// 		case <-time.After(1 * time.Second):
+	// 			fmt.Printf("%v\n", i)
+	// 		}
+	// 	}
+
+	// 	if !messageReceived {
+	// 		t.Fatalf("Timeout, no message was received")
+	// 	}
 }
 
 func TestTemp(t *testing.T) {
