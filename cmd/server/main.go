@@ -24,6 +24,16 @@ import (
 
 const serverVersion string = "0.1.0"
 
+// CommandID - ID of TCP commands
+type CommandID byte
+
+const (
+	// CmdTransfer - transfer an ESB message
+	CmdTransfer CommandID = 0x10
+	// CmdListen - Start listening for ESB messages
+	CmdListen CommandID = 0x20
+)
+
 var opts struct {
 	Verbose bool   `short:"v" help:"Additional output"`
 	Version bool   `name:"version" help:"Print version and exit"`
@@ -90,6 +100,7 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
+	killChannel := make(chan bool, 1)
 	for {
 		header := make([]byte, 2)
 		//_, err := io.ReadAtLeast(conn, header, 2)
@@ -97,6 +108,7 @@ func handleConnection(conn net.Conn) {
 
 		if err != nil {
 			fmt.Println("Client disconnected.")
+			killChannel <- true
 			conn.Close()
 			return
 		}
@@ -117,35 +129,74 @@ func handleConnection(conn net.Conn) {
 		answer[0] = header[0] // answer byte 0: same command byte as the request
 		answer[1] = 0         // answer byte 1: error code
 		// check message content
-		switch header[0] {
+		switch CommandID(header[0]) {
 		// Transfer command
-		case 0x00:
+		case CmdTransfer:
 			// payload must at least contain the target address and a command
 			if payloadSize < 6 {
 				log.Println("Transfer: Packet too short, need at least 6 bytes (5 address + 1 cmd)")
 				answer[1] = 0x01 // error: payload size
-
-			} else {
-				addr := [5]byte{}
-				copy(addr[:5], payload[:5])
-
-				log.Printf("ESB Transfer: Addr %v payload: %v", addr, payload[5:])
-
-				esbAnsPayload, err := esbbridge.Transfer(addr, payload[5:])
-
-				if err != nil {
-					log.Printf("Tansfer Error: %v", err)
-					answer[1] = 0x02 // error: transfer error
-				} else {
-					answer[2] = uint8(len(esbAnsPayload))
-					answer = append(answer, esbAnsPayload...)
-				}
-
+				break
 			}
 
+			addr := [5]byte{}
+			copy(addr[:5], payload[:5])
+
+			log.Printf("ESB Transfer: Addr %v payload: %v", addr, payload[5:])
+
+			esbAnsPayload, err := esbbridge.Transfer(addr, payload[5:])
+
+			if err != nil {
+				log.Printf("Tansfer Error: %v", err)
+				answer[1] = 0x02 // error: transfer error
+			} else {
+				answer[2] = uint8(len(esbAnsPayload))
+				answer = append(answer, esbAnsPayload...)
+			}
+
+		case CmdListen:
+			// payload must contain the target address and a command
+			if payloadSize != 6 {
+				log.Println("Transfer: Invalid packet, must be 6 bytes long (5 address + 1 cmd)")
+				answer[1] = 0x01 // error: payload size
+				break
+			}
+			listenAddr := [5]byte{}
+			copy(listenAddr[:5], payload[:5])
+			listenCmd := payload[5]
+
+			lc := make(chan esbbridge.EsbMessage, 1)
+			esbbridge.AddListener(listenAddr, listenCmd, lc)
+
+			go func(conn net.Conn, lc chan esbbridge.EsbMessage, killChannel chan bool) {
+				for {
+					select {
+					case msg := <-lc:
+						log.Printf("Message received: %v\n", msg)
+						answer[0] = 0x21 // todo, replace magic numbers with constants
+						answer[1] = 0x00
+						answer[2] = uint8(6 + len(msg.Payload))
+						answer = append(answer, msg.Address[:]...)
+						answer = append(answer, msg.Cmd)
+						answer = append(answer, msg.Payload...)
+					case <-killChannel:
+						esbbridge.RemoveListener(lc)
+						log.Printf("Removing listener\n")
+					}
+				}
+			}(conn, lc, killChannel)
+
+			fmt.Printf("Start listening... duh")
+
+		case 0x88:
+			answer[2] = header[1]
+			answer = append(answer, payload...)
+			conn.Write(answer)
+			fmt.Printf("dummy command, ECHO %v\n", answer)
 		}
-		log.Println("Answer: ", answer)
+		log.Printf("Send Answer to client [%v]: %v\n", conn.RemoteAddr(), answer)
 		conn.Write(answer)
+
 	}
 }
 
