@@ -157,6 +157,29 @@ func AddListener(sourceAddr [AddressSize]byte, cmd byte, c listenerChannel) erro
 	return nil
 }
 
+// RemoveListener removes a listenener. Any listener which was registered for the specified channel will be deleted.
+// Returns the number of deleted listeners
+func RemoveListener(c listenerChannel) int {
+
+	var itemsDeleted int = 0
+searchLoop:
+	for {
+		for i, l := range listeners {
+			if l.channel == c {
+				// listener channel matches, remove item
+				listeners = append(listeners[:i], listeners[i+1:]...)
+				itemsDeleted++
+				// restart search since the listeners slice is shorter now
+				continue searchLoop
+			}
+		}
+		// if no more occurences are found, we are finished
+		break searchLoop
+	}
+
+	return itemsDeleted
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Private functions
 ///////////////////////////////////////////////////////////////////////////////

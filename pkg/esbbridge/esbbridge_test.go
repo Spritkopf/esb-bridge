@@ -152,9 +152,25 @@ func TestListener(t *testing.T) {
 	// 	}
 }
 
+// TestRemoveListener tests removal of listeners
+func TestRemoveListener(t *testing.T) {
+	lc := make(chan EsbMessage, 1)
+	lc2 := make(chan EsbMessage, 1)
+	AddListener([5]byte{12, 13, 14, 15, 16}, 0x01, lc)
+	AddListener([5]byte{12, 13, 14, 15, 16}, 0x02, lc2)
+	AddListener([5]byte{12, 13, 14, 15, 16}, 0x02, lc)
+	AddListener([5]byte{12, 13, 14, 15, 16}, 0xFF, lc2)
+
+	n := RemoveListener(lc2)
+
+	if n != 2 {
+		t.Fatalf("Only two listeners should be removed, but it were %v", n)
+	}
+}
+
 func TestTemp(t *testing.T) {
 
-	a := [5]byte{}
-
-	fmt.Println(bytes.Compare(a[:], make([]byte, 5)))
+	c := [5]byte{1, 2, 4}
+	d := [5]byte{1, 2, 3}
+	fmt.Println(bytes.Compare(c[:], d[:]))
 }

@@ -6,7 +6,7 @@ This is work in progress and not considered functional, as long as this notice e
 
 ## Packages in this module
 
-### usbprotocol
+### internal/usbprotocol
 Handles USB serial connection to the esb-bridge-fw (device running the firmware). Should not be used directly
 
 ### pkg/esbbridge
