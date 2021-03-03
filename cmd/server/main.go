@@ -128,6 +128,7 @@ func handleConnection(conn net.Conn) {
 		answer := make([]byte, 3, 64)
 		answer[0] = header[0] // answer byte 0: same command byte as the request
 		answer[1] = 0         // answer byte 1: error code
+		answer[2] = 0         // answer byte 2: payload length
 		// check message content
 		switch CommandID(header[0]) {
 		// Transfer command
@@ -173,12 +174,15 @@ func handleConnection(conn net.Conn) {
 					select {
 					case msg := <-lc:
 						log.Printf("Message received: %v\n", msg)
-						answer[0] = 0x21 // todo, replace magic numbers with constants
-						answer[1] = 0x00
-						answer[2] = uint8(6 + len(msg.Payload))
-						answer = append(answer, msg.Address[:]...)
-						answer = append(answer, msg.Cmd)
-						answer = append(answer, msg.Payload...)
+						txMsg := make([]byte, 3, 64)
+						txMsg[0] = 0x21 // todo, replace magic numbers with constants
+						txMsg[1] = 0x00
+						txMsg[2] = uint8(6 + len(msg.Payload))
+						txMsg = append(txMsg, msg.Address[:]...)
+						txMsg = append(txMsg, msg.Cmd)
+						txMsg = append(txMsg, msg.Payload...)
+						log.Printf("Send: %v\n", txMsg)
+						conn.Write(txMsg)
 					case <-killChannel:
 						esbbridge.RemoveListener(lc)
 						log.Printf("Removing listener\n")
@@ -186,7 +190,7 @@ func handleConnection(conn net.Conn) {
 				}
 			}(conn, lc, killChannel)
 
-			fmt.Printf("Start listening... duh")
+			log.Printf("Adding listener for address %v, Cmd %v\n", listenAddr, listenCmd)
 
 		case 0x88:
 			answer[2] = header[1]

@@ -32,15 +32,19 @@ const (
 
 // EsbMessage is the data type representing a message sent between esb devices
 type EsbMessage struct {
-	address []byte
-	cmd     byte
-	payload []byte
+	Address []byte
+	Cmd     byte
+	Payload []byte
 }
 
-type listener struct {
-	sourceAddr [AddressSize]byte
-	cmd        byte
-	channel    listenerChannel
+// ListenerChannel is used to notify a subscriber about a incoming message it was listening for
+type ListenerChannel chan<- EsbMessage // listenerChannel is send-only
+
+// Listener holds all information necessary listening for a specific message
+type Listener struct {
+	SourceAddr [AddressSize]byte
+	Cmd        byte
+	Channel    ListenerChannel
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -48,9 +52,8 @@ type listener struct {
 ///////////////////////////////////////////////////////////////////////////////
 
 var connected bool = false
-var listeners []listener // Stores callback channels associated to commandIDs and addresses to listen for
+var listeners []Listener // Stores callback channels associated to commandIDs and addresses to listen for
 
-type listenerChannel chan<- EsbMessage // listenerChannel is send-only
 ///////////////////////////////////////////////////////////////////////////////
 // Public API
 ///////////////////////////////////////////////////////////////////////////////
@@ -146,26 +149,26 @@ func Transfer(targetAddr [AddressSize]byte, payload []byte) ([]byte, error) {
 // Params:
 //   sourceAddr - only messages from this sender will be evaluated, an empty array is used to ignore this filter (all senders will be evaluated)
 //   cmd        - only messages with a specific cmd byte (the 1st payload byte) will be evaluated, set to 0xFF to ignore the filter (all message IDs will be evaluated)
-func AddListener(sourceAddr [AddressSize]byte, cmd byte, c listenerChannel) error {
+func AddListener(sourceAddr [AddressSize]byte, cmd byte, c ListenerChannel) error {
 
 	if c == nil {
 		return errors.New("invalid parameter passed for listener channel (nil)")
 	}
 
-	listeners = append(listeners, listener{sourceAddr: sourceAddr, cmd: cmd, channel: c})
+	listeners = append(listeners, Listener{SourceAddr: sourceAddr, Cmd: cmd, Channel: c})
 
 	return nil
 }
 
 // RemoveListener removes a listenener. Any listener which was registered for the specified channel will be deleted.
 // Returns the number of deleted listeners
-func RemoveListener(c listenerChannel) int {
+func RemoveListener(c ListenerChannel) int {
 
 	var itemsDeleted int = 0
 searchLoop:
 	for {
 		for i, l := range listeners {
-			if l.channel == c {
+			if l.Channel == c {
 				// listener channel matches, remove item
 				listeners = append(listeners[:i], listeners[i+1:]...)
 				itemsDeleted++
@@ -198,18 +201,18 @@ func rxCallbackThread(ch chan usbprotocol.Message) {
 
 		message := EsbMessage{}
 
-		message.address = usbMsg.Payload[:5]
-		message.cmd = usbMsg.Payload[5]
+		message.Address = usbMsg.Payload[:5]
+		message.Cmd = usbMsg.Payload[5]
 
 		if len(usbMsg.Payload) > 6 {
-			message.payload = usbMsg.Payload[6:]
+			message.Payload = usbMsg.Payload[6:]
 		}
 
 		// send message to all registered and matching listeners
 		for _, l := range listeners {
-			if ((l.cmd == 0xFF) || (l.cmd == message.cmd)) &&
-				((bytes.Compare(l.sourceAddr[:], message.address) == 0) || (bytes.Compare(l.sourceAddr[:], make([]byte, 5)) == 0)) {
-				l.channel <- message
+			if ((l.Cmd == 0xFF) || (l.Cmd == message.Cmd)) &&
+				((bytes.Compare(l.SourceAddr[:], message.Address) == 0) || (bytes.Compare(l.SourceAddr[:], make([]byte, 5)) == 0)) {
+				l.Channel <- message
 			}
 		}
 	}
