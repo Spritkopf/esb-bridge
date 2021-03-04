@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option go_package = "github.com/spritkopf/esb-bridge/pkg/esbbridge/server";
+
+package server;
+
+// Interface exported by the server.
+service EsbBridge {
+  // Transfers an ESB message to a peripheral device and returns the anwser
+  rpc Transfer(EsbMessage) returns (EsbMessage) {}
+
+  // Starts listening for specific packages. Server will send matching messages async to the client
+  rpc Listen(Listener) returns (stream EsbMessage) {}
+
+}
+
+// Listener holds all information to listen for a specific package
+message Listener {
+  bytes addr = 1;
+  bytes cmd = 2;
+}
+// EsbMessage holds all information for an ESB transaction
+message EsbMessage {
+  bytes addr = 1;
+	bytes cmd = 2;
+	bytes payload  = 3;
+}
