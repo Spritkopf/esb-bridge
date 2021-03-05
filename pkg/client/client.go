@@ -62,9 +62,9 @@ func main() {
 	defer conn.Close()
 	client := pb.NewEsbBridgeClient(conn)
 
-	// Looking for a valid feature
+	// Test transfer function
 	transfer(client, &pb.EsbMessage{Addr: []byte{1, 2, 3, 4, 5}, Cmd: []byte{128}, Payload: []byte{9, 8, 7}})
 
-	// todo: test streaming
+	listen(client, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
 
 }

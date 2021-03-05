@@ -10,6 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/spritkopf/esb-bridge/pkg/esbbridge"
 	pb "github.com/spritkopf/esb-bridge/pkg/server/service"
 )
 
@@ -25,15 +26,33 @@ type esbBridgeServer struct {
 func (s *esbBridgeServer) Transfer(ctx context.Context, msg *pb.EsbMessage) (*pb.EsbMessage, error) {
 
 	// simple echo for now
+	log.Printf("Transfer Message: %v\n", msg)
 	return &pb.EsbMessage{Addr: msg.Addr, Cmd: msg.Cmd, Payload: msg.Payload}, nil
 }
 
-// ListFeatures lists all features contained within the given bounding Rectangle.
+// Listen starts to listen for a specific messages and streams incoming messages to the client
 func (s *esbBridgeServer) Listen(listener *pb.Listener, messageStream pb.EsbBridge_ListenServer) error {
 
-	// if err := messageStream.Send(&pb.EsbMessage{}); err != nil {
-	// 	return err
-	// }
+	log.Printf("Start listening: %v, %v", listener.Addr, listener.Cmd)
+
+	listenAddr := [5]byte{}
+	copy(listenAddr[:5], listener.Addr)
+
+	lc := make(chan esbbridge.EsbMessage, 1)
+	esbbridge.AddListener(listenAddr, listener.Cmd[0], lc)
+
+	// TODO: only 3 cycles for testing purpose, use context as abort criterium
+	for i := 0; i < 3; i++ {
+		msg := <-lc
+		log.Printf("Incoming Message: %v\n", msg)
+		err := messageStream.Send(&pb.EsbMessage{Addr: msg.Address, Cmd: []byte{msg.Cmd}, Payload: msg.Payload})
+		if err != nil {
+			return err
+		}
+
+	}
+
+	log.Println("Done listening")
 
 	return nil
 }
@@ -45,6 +64,18 @@ func newServer() *esbBridgeServer {
 
 func main() {
 	flag.Parse()
+
+	err := esbbridge.Open("/dev/ttyACM0")
+	if err != nil {
+		log.Fatalf("Could not open connection to esb-bridge device: %v", err)
+	}
+	fwVersion, err := esbbridge.GetFwVersion()
+	if err != nil {
+		log.Fatalf("Error reading Firmware version of esb-bridge device: %v", err)
+	}
+	log.Printf("esb-bridge firmware version: %v", fwVersion)
+	defer esbbridge.Close()
+
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
