@@ -4,10 +4,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"time"
 
+	"github.com/spritkopf/esb-bridge/pkg/esbbridge"
 	pb "github.com/spritkopf/esb-bridge/pkg/server/service"
 	"google.golang.org/grpc"
 )
@@ -28,27 +30,38 @@ func transfer(client pb.EsbBridgeClient, msg *pb.EsbMessage) {
 	log.Printf("Answer: %v\n", answerMessage)
 }
 
-// printFeatures lists all the features within the given bounding Rectangle.
-func listen(client pb.EsbBridgeClient, listener *pb.Listener) {
+// Listen will start a listening goroutine which listens for specific messages and sends them to the channel returned by Listen().
+// The RPC Message stream will kep running indefinitely until the context is canceled. Use context.WithCancel and call the cancelFunc.
+// When the context is cancelled, the ROX stream is terminated and the server will stop listening for these messages
+func Listen(ctx context.Context, client pb.EsbBridgeClient, listener *pb.Listener) (<-chan esbbridge.EsbMessage, error) {
 	log.Printf("Start listening: %v", listener)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	stream, err := client.Listen(ctx, listener)
 	if err != nil {
-		log.Fatalf("%v.Listen(_) = _, %v", client, err)
+		log.Printf("%v.Listen(_) = _, %v", client, err)
+		return nil, fmt.Errorf("Error calling remote procedure `Listen()`: %v", err)
 	}
 
-	// only 3 messages for tests, use channel (close)
-	for i := 0; i < 3; i++ {
-		incomingMessage, err := stream.Recv()
-		if err == io.EOF {
-			break
+	rxChan := make(chan esbbridge.EsbMessage, 1)
+
+	go func() {
+		for {
+			incomingMessage, err := stream.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				log.Fatalf("%v.ListenWorker(_) = _, %v", client, err)
+			}
+			log.Printf("Incoming Message: %v", incomingMessage)
+			answerMessage := esbbridge.EsbMessage{
+				Address: incomingMessage.Addr,
+				Cmd:     incomingMessage.Cmd[0],
+				Payload: incomingMessage.Payload}
+			rxChan <- answerMessage
 		}
-		if err != nil {
-			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
-		}
-		log.Printf("Incoming Message %v: %v", i, incomingMessage)
-	}
+	}()
+
+	return rxChan, nil
 }
 
 func main() {
@@ -67,6 +80,14 @@ func main() {
 	// Test transfer function
 	transfer(client, &pb.EsbMessage{Addr: []byte{1, 2, 3, 4, 5}, Cmd: []byte{128}, Payload: []byte{9, 8, 7}})
 
-	listen(client, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
+	// test Listen function
+	ctx, cancel := context.WithCancel(context.Background())
+	rxChan, _ := Listen(ctx, client, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
+
+	for i := 0; i < 4; i++ {
+		msg := <-rxChan
+		log.Printf("Incoming Message: %v", msg)
+	}
+	cancel()
 
 }

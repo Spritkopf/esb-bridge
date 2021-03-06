@@ -34,7 +34,7 @@ func (s *esbBridgeServer) Transfer(ctx context.Context, msg *pb.EsbMessage) (*pb
 // Listen starts to listen for a specific messages and streams incoming messages to the client
 func (s *esbBridgeServer) Listen(listener *pb.Listener, messageStream pb.EsbBridge_ListenServer) error {
 
-	log.Printf("Start listening: %v, %v", listener.Addr, listener.Cmd)
+	log.Printf("Attach listener for Address: %v, Command %v", listener.Addr, listener.Cmd)
 	streamDone := messageStream.Context().Done()
 
 	listenAddr := [5]byte{}
@@ -54,6 +54,8 @@ listenLoop:
 			}
 		case <-streamDone:
 			log.Printf("Listener %v, %v canceled by client", listener.Addr, listener.Cmd)
+			log.Printf("Detach listener for Address: %v, Command %v", listener.Addr, listener.Cmd)
+			esbbridge.RemoveListener(lc)
 			break listenLoop
 		}
 	}
