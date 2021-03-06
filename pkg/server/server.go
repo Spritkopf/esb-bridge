@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	port = flag.Int("port", 10000, "The server port")
+	port   = flag.Int("port", 10000, "The server port")
+	device = flag.String("device", "/dev/ttyACM0", "The esbbridge serial device")
 )
 
 type esbBridgeServer struct {
@@ -34,6 +35,7 @@ func (s *esbBridgeServer) Transfer(ctx context.Context, msg *pb.EsbMessage) (*pb
 func (s *esbBridgeServer) Listen(listener *pb.Listener, messageStream pb.EsbBridge_ListenServer) error {
 
 	log.Printf("Start listening: %v, %v", listener.Addr, listener.Cmd)
+	streamDone := messageStream.Context().Done()
 
 	listenAddr := [5]byte{}
 	copy(listenAddr[:5], listener.Addr)
@@ -41,15 +43,19 @@ func (s *esbBridgeServer) Listen(listener *pb.Listener, messageStream pb.EsbBrid
 	lc := make(chan esbbridge.EsbMessage, 1)
 	esbbridge.AddListener(listenAddr, listener.Cmd[0], lc)
 
-	// TODO: only 3 cycles for testing purpose, use context as abort criterium
-	for i := 0; i < 3; i++ {
-		msg := <-lc
-		log.Printf("Incoming Message: %v\n", msg)
-		err := messageStream.Send(&pb.EsbMessage{Addr: msg.Address, Cmd: []byte{msg.Cmd}, Payload: msg.Payload})
-		if err != nil {
-			return err
+listenLoop:
+	for {
+		select {
+		case msg := <-lc:
+			log.Printf("Incoming Message: %v\n", msg)
+			err := messageStream.Send(&pb.EsbMessage{Addr: msg.Address, Cmd: []byte{msg.Cmd}, Payload: msg.Payload})
+			if err != nil {
+				return err
+			}
+		case <-streamDone:
+			log.Printf("Listener %v, %v canceled by client", listener.Addr, listener.Cmd)
+			break listenLoop
 		}
-
 	}
 
 	log.Println("Done listening")
@@ -65,7 +71,7 @@ func newServer() *esbBridgeServer {
 func main() {
 	flag.Parse()
 
-	err := esbbridge.Open("/dev/ttyACM0")
+	err := esbbridge.Open(*device)
 	if err != nil {
 		log.Fatalf("Could not open connection to esb-bridge device: %v", err)
 	}

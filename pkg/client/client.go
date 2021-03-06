@@ -31,13 +31,15 @@ func transfer(client pb.EsbBridgeClient, msg *pb.EsbMessage) {
 // printFeatures lists all the features within the given bounding Rectangle.
 func listen(client pb.EsbBridgeClient, listener *pb.Listener) {
 	log.Printf("Start listening: %v", listener)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stream, err := client.Listen(ctx, listener)
 	if err != nil {
 		log.Fatalf("%v.Listen(_) = _, %v", client, err)
 	}
-	for {
+
+	// only 3 messages for tests, use channel (close)
+	for i := 0; i < 3; i++ {
 		incomingMessage, err := stream.Recv()
 		if err == io.EOF {
 			break
@@ -45,7 +47,7 @@ func listen(client pb.EsbBridgeClient, listener *pb.Listener) {
 		if err != nil {
 			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 		}
-		log.Printf("Incoming Message: %v", incomingMessage)
+		log.Printf("Incoming Message %v: %v", i, incomingMessage)
 	}
 }
 
