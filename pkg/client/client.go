@@ -19,15 +19,17 @@ var (
 )
 
 // transfer sends a message to a peripheral device and returns the answer message
-func transfer(client pb.EsbBridgeClient, msg *pb.EsbMessage) {
+func transfer(client pb.EsbBridgeClient, msg *pb.EsbMessage) (esbbridge.EsbMessage, error) {
 	log.Printf("Sending Message %v", msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	answerMessage, err := client.Transfer(ctx, msg)
 	if err != nil {
 		log.Fatalf("%v.Transfer(_) = _, %v: ", client, err)
+		return esbbridge.EsbMessage{}, err
 	}
 	log.Printf("Answer: %v\n", answerMessage)
+	return esbbridge.EsbMessage{Address: answerMessage.Addr, Cmd: answerMessage.Cmd[0], Payload: answerMessage.Payload}, nil
 }
 
 // Listen will start a listening goroutine which listens for specific messages and sends them to the channel returned by Listen().
