@@ -25,8 +25,8 @@ func Transfer(client pb.EsbBridgeClient, msg *pb.EsbMessage) (esbbridge.EsbMessa
 }
 
 // Listen will start a listening goroutine which listens for specific messages and sends them to the channel returned by Listen().
-// The RPC Message stream will kep running indefinitely until the context is canceled. Use context.WithCancel and call the cancelFunc.
-// When the context is cancelled, the ROX stream is terminated and the server will stop listening for these messages
+// The RPC Message stream will keep running indefinitely until the context is cancelled. Use context.WithCancel and call the cancelFunc.
+// When the context is cancelled, the RPC stream is terminated and the server will stop listening for these messages
 func Listen(ctx context.Context, client pb.EsbBridgeClient, listener *pb.Listener) (<-chan esbbridge.EsbMessage, error) {
 	log.Printf("Start listening: %v", listener)
 	stream, err := client.Listen(ctx, listener)
