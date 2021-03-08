@@ -8,30 +8,20 @@ import (
 	"testing"
 
 	pb "github.com/spritkopf/esb-bridge/pkg/server/service"
-	"google.golang.org/grpc"
 )
 
 var (
 	serverAddr = flag.String("server_addr", "localhost:10000", "The server address in the format of host:port")
 )
 
-var conn *grpc.ClientConn
-var client pb.EsbBridgeClient
-
 func setup() {
-	var err error
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
-
-	opts = append(opts, grpc.WithBlock())
-	conn, err = grpc.Dial(*serverAddr, opts...)
+	err := Connect(*serverAddr)
 	if err != nil {
-		log.Fatalf("Fail to dial: %v", err)
+		log.Fatalf("Setup: Connection Error: %v", err)
 	}
-	client = pb.NewEsbBridgeClient(conn)
 }
 func teardown() {
-	err := conn.Close()
+	err := Disconnect()
 	if err != nil {
 		fmt.Printf("Error while disconnection: %v)", err)
 
