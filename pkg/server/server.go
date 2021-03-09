@@ -1,5 +1,5 @@
 // Package main implements a simple gRPC server that implements the esbbridge rpc server described in esbbridge_rpc.proto
-package main
+package server
 
 import (
 	"context"
@@ -70,28 +70,40 @@ func newServer() *esbBridgeServer {
 	return s
 }
 
-func main() {
-	flag.Parse()
+// Start starts the esb-bridge RPC server in a goroutine. To cancel the execution,
+// call the returned cancel function
+// Params:
+//   device: device string to connect to (e.g. /dev/ttyACM0)
+//   port: TCP port for the RPC server
+func Start(device string, port uint) (context.CancelFunc, error) {
 
-	err := esbbridge.Open(*device)
+	err := esbbridge.Open(device)
 	if err != nil {
-		log.Fatalf("Could not open connection to esb-bridge device: %v", err)
+		log.Printf("Could not open connection to esb-bridge device: %v", err)
+		return nil, err
 	}
 	fwVersion, err := esbbridge.GetFwVersion()
 	if err != nil {
-		log.Fatalf("Error reading Firmware version of esb-bridge device: %v", err)
+		log.Printf("Error reading Firmware version of esb-bridge device: %v", err)
+		return nil, err
 	}
 	log.Printf("esb-bridge firmware version: %v", fwVersion)
-	defer esbbridge.Close()
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	var opts []grpc.ServerOption
+	ctx, cancel := context.WithCancel(context.Background())
+	go func(context.Context) {
+		defer esbbridge.Close()
 
-	log.Printf("Serving on port %v\n", *port)
-	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterEsbBridgeServer(grpcServer, newServer())
-	grpcServer.Serve(lis)
+		lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", port))
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
+		var opts []grpc.ServerOption
+
+		log.Printf("Serving on port %v\n", port)
+		grpcServer := grpc.NewServer(opts...)
+		pb.RegisterEsbBridgeServer(grpcServer, newServer())
+		grpcServer.Serve(lis)
+	}(ctx)
+
+	return cancel, nil
 }

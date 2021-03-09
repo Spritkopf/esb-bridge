@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	serverAddr = flag.String("server_addr", "localhost:10000", "The server address in the format of host:port")
+	serverAddr = flag.String("server_addr", "localhost:9815", "The server address in the format of host:port")
 )
 
 func setup() {
