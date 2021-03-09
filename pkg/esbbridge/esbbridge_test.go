@@ -54,7 +54,7 @@ func TestGetFwVersion(t *testing.T) {
 
 // TestTransferNotOpen tests error handling when not connected
 func TestTransferNotOpen(t *testing.T) {
-	_, err := Transfer(testPipelineAddress, nil)
+	_, err := Transfer(EsbMessage{})
 
 	if err == nil {
 		t.Fatalf("Transfer should return an error when not connected (i.e. Open() was not called beforehand)")
@@ -66,24 +66,13 @@ func TestTransferNotOpen(t *testing.T) {
 // TestTransferPayloadSize tests error handling for too large and too short payloads
 func TestTransferPayloadSize(t *testing.T) {
 	var veryLongPayload [64]byte
-	var veryShortPayload [2]byte
 
 	Open(testDevice)
 
-	_, err := Transfer(testPipelineAddress, veryLongPayload[:])
+	_, err := Transfer(EsbMessage{Address: testPipelineAddress[:], Payload: veryLongPayload[:]})
 
 	if err == nil {
 		t.Fatalf("Transfer should return an error when Payload is longer than 32 bytes")
-	}
-
-	_, err = Transfer(testPipelineAddress, veryShortPayload[:])
-	if err == nil {
-		t.Fatalf("Transfer should return an error when Payload is shorter than 1 bytes")
-	}
-
-	_, err = Transfer(testPipelineAddress, nil)
-	if err == nil {
-		t.Fatalf("Transfer should return an error when Payload is nil")
 	}
 
 	Close()
@@ -99,17 +88,16 @@ func TestTransfer(t *testing.T) {
 		t.Fatalf("Open() failed with error %v", errOpen)
 	}
 
-	payload := []byte{0x10}
-	ansPayload, err := Transfer(testPipelineAddress, payload)
+	answer, err := Transfer(EsbMessage{Address: testPipelineAddress[:], Cmd: 0x10})
 
 	if err != nil {
 		t.Fatalf("Transfer() failed with error %v", err)
 	}
+	fmt.Printf("Answer: %s\n", answer)
 
-	if len(ansPayload) != 5 {
-		t.Fatalf("Answer payload has unexpected size, Got %v", ansPayload)
+	if (answer.Error) != 0 {
+		t.Fatalf("Answer Message has error code %v", answer.Error)
 	}
-
 	Close()
 }
 

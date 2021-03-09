@@ -29,10 +29,14 @@ func teardown() {
 }
 func TestTransfer(t *testing.T) {
 
-	answerMsg, err := Transfer(client, &pb.EsbMessage{Addr: []byte{1, 2, 3, 4, 5}, Cmd: []byte{128}, Payload: []byte{9, 8, 7}})
+	answerMsg, err := Transfer(client, &pb.EsbMessage{Addr: []byte{111, 111, 111, 111, 1}, Cmd: []byte{0x10}})
 
 	if err != nil {
 		t.Fatalf("Transfer returned error: %v", err)
+	}
+
+	if answerMsg.Error != 0 {
+		t.Fatalf("ESB Answer has Error Code : %v", answerMsg.Error)
 	}
 
 	fmt.Printf("Got answer: %v\n", answerMsg)

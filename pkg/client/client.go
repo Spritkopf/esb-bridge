@@ -79,7 +79,8 @@ func Transfer(client pb.EsbBridgeClient, msg *pb.EsbMessage) (esbbridge.EsbMessa
 		log.Fatalf("%v.Transfer(_) = _, %v: ", client, err)
 		return esbbridge.EsbMessage{}, err
 	}
-	return esbbridge.EsbMessage{Address: answerMessage.Addr, Cmd: answerMessage.Cmd[0], Payload: answerMessage.Payload}, nil
+
+	return esbbridge.EsbMessage{Address: answerMessage.Addr, Cmd: answerMessage.Cmd[0], Error: answerMessage.Error[0], Payload: answerMessage.Payload}, nil
 }
 
 // Listen will start a listening goroutine which listens for specific messages and sends them to the channel returned by Listen().

@@ -23,5 +23,6 @@ message Listener {
 message EsbMessage {
   bytes addr = 1;
 	bytes cmd = 2;
-	bytes payload  = 3;
+  bytes error = 3;
+	bytes payload  = 4;
 }

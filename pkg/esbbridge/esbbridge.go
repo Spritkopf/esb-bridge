@@ -34,6 +34,7 @@ const (
 type EsbMessage struct {
 	Address []byte
 	Cmd     byte
+	Error   byte
 	Payload []byte
 }
 
@@ -47,8 +48,8 @@ type Listener struct {
 	Channel    ListenerChannel
 }
 
-func (m *EsbMessage) String() string {
-	return fmt.Sprintf("Addr: %v Cmd: %v, Payload: %v", m.Address, m.Cmd, m.Payload)
+func (m EsbMessage) String() string {
+	return fmt.Sprintf("Addr: %v Cmd: %v, Error: %v, Payload: %v", m.Address, m.Cmd, m.Error, m.Payload)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -109,44 +110,40 @@ func GetFwVersion() (string, error) {
 	return versionStr, nil
 }
 
-// Transfer sends a packet to the target pipeline address and returns the answer
-//
-// Params:
-//   targetAddr - target pipeline address, only 5-byte addresses are supported
-//   payload    - payload to be transmitted, maximum length is 32 (see MaxPayloadSize)
-// Returns a slice of bytes with the answer payload and an error
-func Transfer(targetAddr [AddressSize]byte, payload []byte) ([]byte, error) {
+// Transfer sends a message to an ESB device and returns the answer
+func Transfer(message EsbMessage) (EsbMessage, error) {
 	if !connected {
-		return nil, errors.New("Device is not connected, call Open() first")
+		return EsbMessage{}, errors.New("Device is not connected, call Open() first")
 	}
 
-	if payload == nil {
-		return nil, fmt.Errorf("Payload must not be empty")
+	if len(message.Payload) > int(MaxPayloadSize) {
+		return EsbMessage{}, fmt.Errorf("Payload too long, maximum is %v", MaxPayloadSize)
 	}
 
-	if len(payload) > int(MaxPayloadSize) {
-		return nil, fmt.Errorf("Payload too long, maximum is %v", MaxPayloadSize)
-	}
-	if len(payload) < 1 {
-		return nil, fmt.Errorf("Payload too short, minimum is 6 (5bytes address, at least 1 byte payload)")
+	if message.Payload == nil {
+		message.Payload = []byte{}
 	}
 
 	txMsg := usbprotocol.Message{}
 	txMsg.Cmd = UsbCmdTransfer
-	txMsg.Payload = append(txMsg.Payload, targetAddr[:]...)
-	txMsg.Payload = append(txMsg.Payload, payload[:]...)
+	txMsg.Payload = append(txMsg.Payload, message.Address...)
+	txMsg.Payload = append(txMsg.Payload, message.Cmd)
+	txMsg.Payload = append(txMsg.Payload, message.Payload...)
 
 	answerMessage, err := usbprotocol.Transfer(txMsg)
 
-	if answerMessage.Err != 0 {
-		return nil, fmt.Errorf("ESB Transfer command returned with error code: 0x%02X", answerMessage.Err)
-	}
-
 	if err != nil {
-		return nil, err
+		return EsbMessage{}, err
 	}
 
-	return answerMessage.Payload, nil
+	if answerMessage.Err != 0 {
+		return EsbMessage{}, fmt.Errorf("ESB Transfer command returned with error code: 0x%02X", answerMessage.Err)
+	}
+
+	message.Cmd = answerMessage.Payload[0]
+	message.Error = answerMessage.Payload[1]
+	message.Payload = answerMessage.Payload[2:]
+	return message, nil
 }
 
 // AddListener adds a listenener. Any incoming message with this CommandID and/or address will be redirected to c
