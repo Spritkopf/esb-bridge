@@ -26,12 +26,15 @@ type esbBridgeServer struct {
 // GetFeature returns the feature at the given point.
 func (s *esbBridgeServer) Transfer(ctx context.Context, msg *pb.EsbMessage) (*pb.EsbMessage, error) {
 
-	log.Printf("Transfer Message: %v\n", msg)
+	txMessage := esbbridge.EsbMessage{Address: msg.Addr, Cmd: msg.Cmd[0], Payload: msg.Payload}
 
-	answer, err := esbbridge.Transfer(esbbridge.EsbMessage{Address: msg.Addr, Cmd: msg.Cmd[0], Payload: msg.Payload})
+	log.Printf("Transfer Message: %v\n", txMessage)
+
+	answer, err := esbbridge.Transfer(txMessage)
 
 	if err != nil {
 		log.Printf("Transfer error: %v", err)
+		return nil, err
 	}
 
 	return &pb.EsbMessage{Addr: msg.Addr, Cmd: []byte{answer.Cmd}, Error: []byte{answer.Error}, Payload: answer.Payload}, nil

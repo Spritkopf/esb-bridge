@@ -30,7 +30,7 @@ func teardown() {
 }
 func TestTransfer(t *testing.T) {
 
-	answerMsg, err := Transfer(client, &pb.EsbMessage{Addr: []byte{111, 111, 111, 111, 1}, Cmd: []byte{0x10}})
+	answerMsg, err := Transfer(&pb.EsbMessage{Addr: []byte{111, 111, 111, 111, 1}, Cmd: []byte{0x10}})
 
 	if err != nil {
 		t.Fatalf("Transfer returned error: %v", err)
@@ -45,7 +45,7 @@ func TestTransfer(t *testing.T) {
 
 func TestListen(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	rxChan, _ := Listen(ctx, client, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
+	rxChan, _ := Listen(ctx, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
 
 	for i := 0; i < 4; i++ {
 		msg := <-rxChan

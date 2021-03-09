@@ -66,7 +66,7 @@ func Disconnect() error {
 }
 
 // Transfer sends a message to a peripheral device and returns the answer message
-func Transfer(client pb.EsbBridgeClient, msg *pb.EsbMessage) (esbbridge.EsbMessage, error) {
+func Transfer(msg *pb.EsbMessage) (esbbridge.EsbMessage, error) {
 
 	if !connected {
 		return esbbridge.EsbMessage{}, fmt.Errorf("Not connected to server")
@@ -86,7 +86,7 @@ func Transfer(client pb.EsbBridgeClient, msg *pb.EsbMessage) (esbbridge.EsbMessa
 // Listen will start a listening goroutine which listens for specific messages and sends them to the channel returned by Listen().
 // The RPC Message stream will keep running indefinitely until the context is cancelled. Use context.WithCancel and call the cancelFunc.
 // When the context is cancelled, the RPC stream is terminated and the server will stop listening for these messages
-func Listen(ctx context.Context, client pb.EsbBridgeClient, listener *pb.Listener) (<-chan esbbridge.EsbMessage, error) {
+func Listen(ctx context.Context, listener *pb.Listener) (<-chan esbbridge.EsbMessage, error) {
 
 	if !connected {
 		return nil, fmt.Errorf("Not connected to server")
