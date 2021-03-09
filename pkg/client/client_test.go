@@ -15,14 +15,16 @@ var (
 	serverAddr = flag.String("server_addr", "localhost:9815", "The server address in the format of host:port")
 )
 
+var c EsbClient
+
 func setup() {
-	err := Connect(*serverAddr)
+	err := c.Connect(*serverAddr)
 	if err != nil {
 		log.Fatalf("Setup: Connection Error: %v", err)
 	}
 }
 func teardown() {
-	err := Disconnect()
+	err := c.Disconnect()
 	if err != nil {
 		fmt.Printf("Error while disconnection: %v)", err)
 
@@ -30,7 +32,7 @@ func teardown() {
 }
 func TestTransfer(t *testing.T) {
 
-	answerMsg, err := Transfer(&pb.EsbMessage{Addr: []byte{111, 111, 111, 111, 1}, Cmd: []byte{0x10}})
+	answerMsg, err := c.Transfer(&pb.EsbMessage{Addr: []byte{111, 111, 111, 111, 1}, Cmd: []byte{0x10}})
 
 	if err != nil {
 		t.Fatalf("Transfer returned error: %v", err)
@@ -45,7 +47,7 @@ func TestTransfer(t *testing.T) {
 
 func TestListen(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	rxChan, _ := Listen(ctx, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
+	rxChan, _ := c.Listen(ctx, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
 
 	for i := 0; i < 4; i++ {
 		msg := <-rxChan
@@ -53,7 +55,6 @@ func TestListen(t *testing.T) {
 	}
 	cancel()
 }
-
 func TestMain(m *testing.M) {
 	setup()
 	code := m.Run()
