@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -43,14 +44,14 @@ func TestTransfer(t *testing.T) {
 }
 
 func TestListen(t *testing.T) {
-	// 	ctx, cancel := context.WithCancel(context.Background())
-	// 	rxChan, _ := Listen(ctx, client, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
+	ctx, cancel := context.WithCancel(context.Background())
+	rxChan, _ := Listen(ctx, client, &pb.Listener{Addr: []byte{12, 13, 14, 15, 16}, Cmd: []byte{0xFF}})
 
-	// 	for i := 0; i < 4; i++ {
-	// 		msg := <-rxChan
-	// 		log.Printf("Incoming Message: %v", msg)
-	// 	}
-	// 	cancel()
+	for i := 0; i < 4; i++ {
+		msg := <-rxChan
+		log.Printf("Incoming Message: %v", msg)
+	}
+	cancel()
 }
 
 func TestMain(m *testing.M) {
