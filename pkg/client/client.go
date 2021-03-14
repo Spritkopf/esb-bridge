@@ -78,7 +78,7 @@ func (c *EsbClient) Disconnect() error {
 }
 
 // Transfer sends a message to a peripheral device and returns the answer message
-func (c *EsbClient) Transfer(msg *pb.EsbMessage) (esbbridge.EsbMessage, error) {
+func (c *EsbClient) Transfer(msg esbbridge.EsbMessage) (esbbridge.EsbMessage, error) {
 
 	if !c.connected {
 		return esbbridge.EsbMessage{}, fmt.Errorf("Not connected to server")
@@ -86,7 +86,7 @@ func (c *EsbClient) Transfer(msg *pb.EsbMessage) (esbbridge.EsbMessage, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	answerMessage, err := c.client.Transfer(ctx, msg)
+	answerMessage, err := c.client.Transfer(ctx, &pb.EsbMessage{Addr: msg.Address, Cmd: []byte{msg.Cmd}, Payload: msg.Payload})
 	if err != nil {
 		log.Fatalf("%v.Transfer(_) = _, %v: ", c.client, err)
 		return esbbridge.EsbMessage{}, err
@@ -98,12 +98,13 @@ func (c *EsbClient) Transfer(msg *pb.EsbMessage) (esbbridge.EsbMessage, error) {
 // Listen will start a listening goroutine which listens for specific messages and sends them to the channel returned by Listen().
 // The RPC Message stream will keep running indefinitely until the context is cancelled. Use context.WithCancel and call the cancelFunc.
 // When the context is cancelled, the RPC stream is terminated and the server will stop listening for these messages
-func (c *EsbClient) Listen(ctx context.Context, listener *pb.Listener) (<-chan esbbridge.EsbMessage, error) {
+func (c *EsbClient) Listen(ctx context.Context, addr []byte, cmd byte) (<-chan esbbridge.EsbMessage, error) {
 
 	if !c.connected {
 		return nil, fmt.Errorf("Not connected to server")
 	}
-	stream, err := c.client.Listen(ctx, listener)
+
+	stream, err := c.client.Listen(ctx, &pb.Listener{Addr: addr, Cmd: []byte{cmd}})
 	if err != nil {
 		fmt.Printf("%v.Listen(_) = _, %v", c.client, err)
 		return nil, fmt.Errorf("Error calling remote procedure `Listen()`: %v", err)
