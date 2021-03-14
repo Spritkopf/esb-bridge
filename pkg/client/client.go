@@ -21,8 +21,8 @@ import (
 type EsbClientInterface interface {
 	Connect(address string) error
 	Disconnect() error
-	Transfer(msg *pb.EsbMessage) (esbbridge.EsbMessage, error)
-	Listen(ctx context.Context, listener *pb.Listener) (<-chan esbbridge.EsbMessage, error)
+	Transfer(msg esbbridge.EsbMessage) (esbbridge.EsbMessage, error)
+	Listen(ctx context.Context, addr []byte, cmd byte) (<-chan esbbridge.EsbMessage, error)
 }
 
 // EsbClient represents the RPC connection and implements the EsbClientInterface
