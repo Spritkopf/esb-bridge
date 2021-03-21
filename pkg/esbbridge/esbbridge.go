@@ -193,20 +193,19 @@ func rxCallbackThread(ch chan usbprotocol.Message) {
 	for {
 		usbMsg := <-ch
 
-		// message error is discarded for CmdRx, should always be OK
-
-		// check payload size, must at least contain a source address (5 bytes) and a cmd ID
-		if len(usbMsg.Payload) < 6 {
+		// check payload size, must at least contain a source address (5 bytes), error, and a cmd ID
+		if len(usbMsg.Payload) < 7 {
 			return
 		}
 
 		message := EsbMessage{}
 
-		message.Address = usbMsg.Payload[:5]
-		message.Cmd = usbMsg.Payload[5]
+		message.Cmd = usbMsg.Payload[0]
+		// message error (usbMsg.Payload[1]) is discarded for CmdRx, should always be OK
+		message.Address = usbMsg.Payload[2:7]
 
-		if len(usbMsg.Payload) > 6 {
-			message.Payload = usbMsg.Payload[6:]
+		if len(usbMsg.Payload) > 7 {
+			message.Payload = usbMsg.Payload[7:]
 		}
 
 		// send message to all registered and matching listeners

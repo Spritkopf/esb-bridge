@@ -121,7 +121,7 @@ func TestListener(t *testing.T) {
 
 	lc := make(chan EsbMessage, 1)
 
-	AddListener([5]byte{12, 13, 14, 15, 16}, 0xFF, lc)
+	AddListener([5]byte{111, 111, 111, 111, 1}, 0xFF, lc)
 
 timeoutLoop:
 	for i := 10; i > 0; i-- {

@@ -36,7 +36,7 @@ func (s *esbBridgeServer) Transfer(ctx context.Context, msg *pb.EsbMessage) (*pb
 		log.Printf("Transfer error: %v", err)
 		return nil, err
 	}
-
+	log.Printf("Answer: %v\n", answer)
 	return &pb.EsbMessage{Addr: msg.Addr, Cmd: []byte{answer.Cmd}, Error: []byte{answer.Error}, Payload: answer.Payload}, nil
 }
 
