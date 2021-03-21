@@ -18,7 +18,7 @@ const packetSize = 64
 const MaxPayloadLen = packetSize - 4 - 2
 
 // DefaultTimeout is the default Transfer-timeout in milliseconds waiting for an answer message befor returning an error
-const DefaultTimeout = 500
+const DefaultTimeout = 1200
 
 // sync byte, marks the beginning of a new packet
 const sync = 0x69
