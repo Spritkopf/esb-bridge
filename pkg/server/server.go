@@ -3,7 +3,6 @@ package server
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -14,9 +13,8 @@ import (
 	pb "github.com/spritkopf/esb-bridge/pkg/server/service"
 )
 
-var (
-	port   = flag.Int("port", 10000, "The server port")
-	device = flag.String("device", "/dev/ttyACM0", "The esbbridge serial device")
+const (
+	hostname = "esbbridgeserver"
 )
 
 type esbBridgeServer struct {
@@ -102,7 +100,7 @@ func Start(device string, port uint) (context.CancelFunc, error) {
 	go func(context.Context) {
 		defer esbbridge.Close()
 
-		lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", port))
+		lis, err := net.Listen("tcp", fmt.Sprintf("%v:%v", hostname, port))
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
