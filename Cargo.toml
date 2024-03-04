@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 crc16 = "*"
+clap = { version = "3.1.12", features = ["derive"] }
