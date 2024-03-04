@@ -1,4 +1,5 @@
 use std::time::Duration;
+use std::sync::mpsc;
 use serialport::SerialPort;
 use crc16;
 use log;
@@ -33,7 +34,7 @@ pub struct UsbProtocol {
 
 struct Listener {
     cmd_id: u8,
-    channel: u8,
+    channel: mpsc::Sender<Message>,
 }
 
 impl Message {
@@ -137,6 +138,10 @@ impl UsbProtocol {
             Some(msg) => Ok(msg),
             None => Err(String::from(format!("Got no valid answer for request with ID {:?}", msg.id)))
         }
+    }
+
+    pub fn add_listener(&mut self, cmd_id: u8, channel: mpsc::Sender<Message>) {
+        self.listeners.append(&mut vec![Listener{cmd_id, channel}]);
     }
 
 }
