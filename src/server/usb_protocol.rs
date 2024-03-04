@@ -6,12 +6,12 @@ const CRC_SIZE: usize = 2;
 const SYNC_BYTE: u8 = 0xB4;
 const MAX_PL_LEN: usize = PACKET_SIZE - HEADER_SIZE - CRC_SIZE;
 
-const IDX_SYNC: u8 = 0;
-const IDX_ID: u8 = 1;
-const IDX_ERR: u8 = 2;
-const IDX_PL_LEN: u8 = 3;
-const IDX_PL: u8 = 4;
-const IDX_CRC: u8 = (MAX_PL_LEN - CRC_SIZE) as u8;
+const IDX_SYNC: usize = 0;
+const IDX_ID: usize = 1;
+const IDX_ERR: usize = 2;
+const IDX_PL_LEN: usize = 3;
+const IDX_PL: usize = 4;
+const IDX_CRC: usize = PACKET_SIZE - CRC_SIZE;
 
 /// Representation of a USB protocol message
 pub struct Message {
@@ -50,25 +50,25 @@ impl Message {
     /// Construct a message from a byte slice received from the device
     pub fn from_bytes(bytes: &[u8]) -> Option<Message> {
         // Check Packet size
-        if bytes.len() != 64 {
+        if bytes.len() != PACKET_SIZE {
             return None;
         }
         // Check SYNC byte
-        if bytes[0] != SYNC_BYTE {
+        if bytes[IDX_SYNC] != SYNC_BYTE {
             return None;
         }
 
         // Check CRC
-        if crc(&bytes[..PACKET_SIZE-CRC_SIZE]) != (((bytes[PACKET_SIZE-1] as u16) << 8) | (bytes[PACKET_SIZE-2] as u16)) {
+        if crc(&bytes[..IDX_CRC]) != (((bytes[IDX_CRC+1] as u16) << 8) | (bytes[IDX_CRC] as u16)) {
             return None;
         }
 
         let payload_len = bytes[3] as usize;
 
         Some(Message {
-            id: bytes[1],
-            err: bytes[2],
-            payload: bytes[4..4 + payload_len].to_vec(),
+            id: bytes[IDX_ID],
+            err: bytes[IDX_ERR],
+            payload: bytes[IDX_PL..IDX_PL + payload_len].to_vec(),
         })
     }
 }
