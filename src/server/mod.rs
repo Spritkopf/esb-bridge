@@ -1,4 +1,4 @@
-pub mod usbprotocol;
+pub mod usb_protocol;
 
 pub struct Server {
     device: String,
@@ -13,10 +13,14 @@ impl Server {
         Ok(Server { device, port })
     }
 
-    pub fn start() -> Result<(), String> {
+    pub fn start(&self) -> Result<(), String> {
 
         // todo: start RPC server here (grpc? protobuf? tbd...)
-        
+        // 
+        Ok(())
+    }
+
+    pub fn transfer(&self) -> Result<(), String> {
         Ok(())
     }
 }
