@@ -15,7 +15,7 @@ const IDX_CRC: usize = PACKET_SIZE - CRC_SIZE;
 
 /// Representation of a USB protocol message
 pub struct Message {
-    id: u8,
+    pub id: u8,
     pub err: u8,
     pub payload: Vec<u8>,
 }

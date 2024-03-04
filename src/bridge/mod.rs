@@ -2,10 +2,20 @@ pub mod usb_protocol;
 
 use std::time::Duration;
 
+use usb_protocol::Message;
 use serialport::SerialPort;
 
 const SERIAL_PORT_BAUDRATE: u32 = 9600;
 const SERIAL_PORT_TIMEOUT: u64 = 100;
+
+enum CmdCodes {
+    CmdVersion     = 0x10,   // Get firmware version
+    CmdTransfer    = 0x30,   // Transfer message
+    CmdSend        = 0x31,   // Send a message
+    CmdTest        = 0x61,   // test command, do not use
+    CmdIrq         = 0x80,   // interrupt callback, only from device to host
+    CmdRx          = 0x81,   // callback from incoming ESB message
+}
 
 pub struct Bridge {
     device: String,
@@ -32,40 +42,55 @@ impl Bridge {
         Ok(())
     }
 
-    pub fn get_firmware_version(&self) -> Result<String, String> {
+    pub fn get_firmware_version(&mut self) -> Result<String, String> {
 
-        Ok(String::from("v0.1.0")
+        let res = self.transfer(Message::new(CmdCodes::CmdVersion as u8, vec![]).unwrap());
+        match res {
+            Ok(answer) => Ok(String::from(format!("v{}.{}.{}", answer.payload[0], answer.payload[1], answer.payload[2]))),
+            _ => Err(String::from("Error reading Firmware version"))
+        }
+
+       
     }
 
-    pub fn transfer(&mut self) -> Result<(), String> {
+    /// Transfer a message
+    fn transfer(&mut self, msg: Message) -> Result<Message, String> {
 
-        /// TEMPORARY TEST ROUTINE to test two-way communication
-        /// To be removed
-        let mut write_buffer: Vec<u8> = vec![0; 256];
-        write_buffer[0] = b'H';
-        write_buffer[1] = b'e';
-        write_buffer[2] = b'l';
-        write_buffer[3] = b'l';
-        write_buffer[4] = b'o';
-        write_buffer[5] = b'\n';
+        // TEMPORARY TEST ROUTINE to test two-way communication
+        // To be removed
+        // let mut write_buffer: Vec<u8> = vec![0; 256];
+        // write_buffer[0] = b'H';
+        // write_buffer[1] = b'e';
+        // write_buffer[2] = b'l';
+        // write_buffer[3] = b'l';
+        // write_buffer[4] = b'o';
+        // write_buffer[5] = b'\n';
         
-        let n = 6; // How many bytes to write to serial port.
-        
+        let write_buffer = msg.to_bytes();
+
         // Write to serial port
-        self.serial_port
-            .write(&write_buffer[..n]) // blocks
+        let num_tx = self.serial_port
+            .write(&write_buffer) // blocks
+            .unwrap();
+        println!("Written bytes: {:?}", num_tx);
+
+        let mut read_buffer: Vec<u8> = vec![0; 64];
+
+        let n = self.serial_port
+            .read(&mut read_buffer) // blocks
             .unwrap();
 
-    let mut read_buffer: Vec<u8> = vec![0; 64];
+        println!("Read bytes: {:?}", n);
+        println!("{:?}", &read_buffer[..n]);   
+        
+        //let s1: String = String::from_utf8(read_buffer).unwrap();
+        //println!("{:?}", s1);   
+        
+        let answer_msg = Message::from_bytes(&read_buffer);
 
-    let n = self.serial_port
-        .read(&mut read_buffer) // blocks
-        .unwrap();
-
-    println!("{:?}", &read_buffer[..n]);   
-    let s1: String = String::from_utf8(read_buffer).unwrap();
-    println!("{:?}", s1);   
-
-        Ok(())
+        match answer_msg {
+            Some(msg) => Ok(msg),
+            None => Err(String::from(format!("Got no valid answer for request with ID {:?}", msg.id)))
+        }
     }
 }

@@ -1,9 +1,7 @@
 
 
-use std::time::Duration;
 
 use clap::Parser;
-use serialport;
 use esb_bridge::bridge::Bridge;
 
 #[derive(Parser, Debug)]
@@ -36,6 +34,5 @@ fn main() {
     
     let bridge_version = my_bridge.get_firmware_version().expect("Failed to read Firmware version");
     println!("esb-bridge firmware version: {bridge_version}");
-    let test = my_bridge.transfer().unwrap();
     
 }
