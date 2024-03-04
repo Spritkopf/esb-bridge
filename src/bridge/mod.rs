@@ -56,23 +56,14 @@ impl Bridge {
     /// Transfer a message
     fn transfer(&mut self, msg: Message) -> Result<Message, String> {
 
-        // TEMPORARY TEST ROUTINE to test two-way communication
-        // To be removed
-        // let mut write_buffer: Vec<u8> = vec![0; 256];
-        // write_buffer[0] = b'H';
-        // write_buffer[1] = b'e';
-        // write_buffer[2] = b'l';
-        // write_buffer[3] = b'l';
-        // write_buffer[4] = b'o';
-        // write_buffer[5] = b'\n';
-        
         let write_buffer = msg.to_bytes();
 
         // Write to serial port
         let num_tx = self.serial_port
             .write(&write_buffer) // blocks
             .unwrap();
-        println!("Written bytes: {:?}", num_tx);
+        
+        //println!("Written bytes: {:?}", num_tx);
 
         let mut read_buffer: Vec<u8> = vec![0; 64];
 
@@ -80,11 +71,9 @@ impl Bridge {
             .read(&mut read_buffer) // blocks
             .unwrap();
 
-        println!("Read bytes: {:?}", n);
-        println!("{:?}", &read_buffer[..n]);   
-        
-        //let s1: String = String::from_utf8(read_buffer).unwrap();
-        //println!("{:?}", s1);   
+        // For debugging comment these two lines in
+        //println!("Read bytes: {:?}", n);
+        //println!("{:?}", &read_buffer[..n]);   
         
         let answer_msg = Message::from_bytes(&read_buffer);
 

@@ -3,7 +3,7 @@ use crc16;
 const PACKET_SIZE: usize = 64;
 const HEADER_SIZE: usize = 4;
 const CRC_SIZE: usize = 2;
-const SYNC_BYTE: u8 = 0xB4;
+const SYNC_BYTE: u8 = 0x69;
 const MAX_PL_LEN: usize = PACKET_SIZE - HEADER_SIZE - CRC_SIZE;
 
 const IDX_SYNC: usize = 0;
@@ -41,7 +41,7 @@ impl Message {
         ]
         .concat();
         let checksum = crc(&data);
-        println!("Checksum: {:X}", checksum);
+        println!("Calculated checksum: {:X}", checksum);
         data.push(checksum as u8);
         data.push((checksum >> 8) as u8);
         data
@@ -74,7 +74,6 @@ impl Message {
 }
 
 fn crc(data: &[u8]) -> u16 {
-    println!("{:X?}", data);
     crc16::State::<crc16::CCITT_FALSE>::calculate(data)
 }
 
