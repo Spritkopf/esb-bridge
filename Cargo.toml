@@ -1,5 +1,5 @@
 [package]
-name = "usb_protocol"
+name = "esb-bridge"
 version = "0.1.0"
 edition = "2021"
 
