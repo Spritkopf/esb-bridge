@@ -29,7 +29,6 @@ pub struct Message {
 }
 
 pub struct UsbProtocol {
-    device: String,
     handle: Option<thread::JoinHandle<()>>,
     listeners: Arc<Mutex<HashMap<u8, mpsc::Sender<Message>>>>,
     tx_channel_sender: mpsc::Sender<Message>,
@@ -183,7 +182,6 @@ impl UsbProtocol {
                     }
                 }));
                 Ok(UsbProtocol {
-                    device: device,
                     handle: handle,
                     listeners: listeners,
                     tx_channel_sender: tx_ch_sender,
