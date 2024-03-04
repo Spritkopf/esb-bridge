@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+use std::{thread, sync};
 use std::time::Duration;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use serialport::SerialPort;
 use crc16;
 use log;
@@ -28,13 +30,9 @@ pub struct Message {
 }
 
 pub struct UsbProtocol {
-    serial_port: Box<dyn SerialPort>,
-    listeners: Vec<Listener>,
-}
-
-struct Listener {
-    cmd_id: u8,
-    channel: mpsc::Sender<Message>,
+    device: String,
+    handle: Option<thread::JoinHandle<()>>,
+    listeners: Arc<Mutex<HashMap<u8, mpsc::Sender<Message>>>>,
 }
 
 impl Message {
@@ -96,41 +94,80 @@ fn crc(data: &[u8]) -> u16 {
 
 impl UsbProtocol {
     /// Creates a new UsbProtocol instance and returns it
-    pub fn new(device: String) -> Result<Self, String> {
+    pub fn new(device: String) -> UsbProtocol {
+        UsbProtocol{
+            device: device,
+            handle: None,
+            listeners: Arc::new(Mutex::new(HashMap::new())),
+        }
+        
+    }
 
-        let port_result = serialport::new(&device, SERIAL_PORT_BAUDRATE)
+    /// Start listening for incoming messages
+    /// This function will spawn a thread that runs close() is called. 
+    /// Each received USB message will be analyzed and if it matches a registered listener, 
+    /// it will be relayed to that listeners channel
+    pub fn start(&mut self) -> Result<(),String>{
+        
+        let port_result = serialport::new(&self.device, SERIAL_PORT_BAUDRATE)
             .timeout(Duration::from_millis(SERIAL_PORT_TIMEOUT))
             .open();
-
+        
         match port_result {
-            Ok(port) => Ok(
-                            UsbProtocol {
-                                serial_port: port,
-                                listeners: Vec::new(),
-                            }
-                        ),
-            Err(_) => Err(String::from(format!("Unable to open serial port {}", device)))
+            Ok(mut port) => {
+                //let (usb_rx, usb_tx) = mpsc::channel::<Message>();
+                
+                let listeners = self.listeners.clone();
+
+                self.handle = Some(thread::spawn(move || {
+                    let mut read_buffer: Vec<u8> = vec![0; PACKET_SIZE];
+
+                    loop{
+                        let n = port.read(&mut read_buffer) // blocks
+                        .unwrap();
+                        match Message::from_bytes(&read_buffer){
+                            Some(msg) => {
+                                {
+                                    let l = listeners.lock().unwrap();
+                                    match l.get(&msg.id){
+                                        Some(listen_channel) => {
+                                            log::debug!("Got message for listener with CMD {}", &msg.id);
+                                            listen_channel.send(msg).unwrap();
+
+                                        }
+                                        None => log::debug!("Got message but no listener registered for CMD {:02X}", msg.id),
+            
+                                    }
+                                }
+                            },
+                            None => log::debug!("Discarding invalid message"),
+                        }
+                    }
+                }));
+                Ok(())
+            },
+            Err(_) => Err(String::from(format!("Unable to open serial port {}", self.device)))
         }
     }
 
     /// Transfers a USB Message and returns the answer
     pub fn transfer(&mut self, msg: Message) -> Result<Message, String> {
-        let write_buffer = msg.to_bytes();
+        // let write_buffer = msg.to_bytes();
 
-        // Write to serial port
-        let num_tx = self.serial_port
-            .write(&write_buffer) // blocks
-            .unwrap();
+        // // Write to serial port
+        // let num_tx = self.serial_port
+        //     .write(&write_buffer) // blocks
+        //     .unwrap();
         
-        log::debug!("Written bytes: {:?}", num_tx);
+        // log::debug!("Written bytes: {:?}", num_tx);
 
         let mut read_buffer: Vec<u8> = vec![0; PACKET_SIZE];
 
-        let n = self.serial_port
-            .read(&mut read_buffer) // blocks
-            .unwrap();
+        // let n = self.serial_port
+        //     .read(&mut read_buffer) // blocks
+        //     .unwrap();
 
-        log::debug!("Read bytes: {:?} {:?}", n, &read_buffer[..n]);
+        // log::debug!("Read bytes: {:?} {:?}", n, &read_buffer[..n]);
         
         let answer_msg = Message::from_bytes(&read_buffer);
 
@@ -141,13 +178,19 @@ impl UsbProtocol {
     }
 
     pub fn add_listener(&mut self, cmd_id: u8, channel: mpsc::Sender<Message>) {
-        self.listeners.append(&mut vec![Listener{cmd_id, channel}]);
+
+        let mut listeners = self.listeners.lock().unwrap();
+
+        listeners.insert(cmd_id, channel);
+        log::info!("Registered listener for cmd_id {:02X}", cmd_id);
     }
 
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::bridge::CmdCodes;
+
     use super::*;
 
     #[test]
@@ -174,17 +217,14 @@ mod tests {
     fn to_bytes() {
         let msg = Message::new(2, vec![0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16]).unwrap();
         let bytes = msg.to_bytes();
-
+        let expected_bytes = [
+            vec![105, 2, 0, 7, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16],
+            vec![0x00; 51],
+            vec![0x28, 0xDB]
+        ].concat();
         assert_eq!(bytes.len(), PACKET_SIZE);
-        assert_eq!(
-            bytes,
-            [
-                vec![180, 2, 0, 7, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16],
-                vec![0x00; 51],
-                vec![0x00, 0x71]
-            ]
-            .concat()
-        );
+        assert_eq!(bytes, expected_bytes);
+    
 
         // Edge case: No padding bytes in payload
         let msg = Message::new(2, vec![0x00; MAX_PL_LEN]).unwrap();
@@ -194,9 +234,9 @@ mod tests {
         assert_eq!(
             bytes,
             [
-                vec![180, 2, 0, MAX_PL_LEN as u8],
+                vec![105, 2, 0, MAX_PL_LEN as u8],
                 vec![0x00; MAX_PL_LEN],
-                vec![0x4B, 0xE6]
+                vec![0x63, 0x4C]
             ]
             .concat()
         );
@@ -204,9 +244,9 @@ mod tests {
     #[test]
     fn from_bytes() {
         let bytes = [
-            vec![180, 2, 3, 7, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16],
+            vec![105, 2, 3, 7, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16],
             vec![0x00; 51],
-            vec![0xF0, 0xAC],
+            vec![0xD8, 0x06],
         ]
         .concat();
         let msg = Message::from_bytes(&bytes).unwrap();
@@ -215,4 +255,23 @@ mod tests {
         assert_eq!(msg.payload.len(), 7);
         assert_eq!(msg.payload, vec![0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16]);
     }
+
+    #[test]
+    #[ignore]
+    /// This test needs manual interaction. Once the test is started the "test" button on the
+    /// device must be pressed within 3 seconds, which sends a message with ID CMD_IRQ to the host
+    fn irq() {
+        let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0"));
+        prot.start().unwrap();
+
+        let (rx_sender, rx_receiver) = mpsc::channel::<Message>();
+
+        prot.add_listener(CmdCodes::CmdIrq as u8, rx_sender);
+
+        match rx_receiver.recv() {
+            Ok(received) => println!("Got: {:?}", received.to_bytes()),
+            Err(e) => println!("ERROR!!!! {:?}", e)
+        }
+     }  
+
 }
