@@ -2,8 +2,8 @@ use crc16;
 use log;
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc, Mutex};
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
 
 const PACKET_SIZE: usize = 64;
 const HEADER_SIZE: usize = 4;
@@ -26,33 +26,33 @@ const SERIAL_PORT_TIMEOUT: u64 = 100;
 /// the UsbProtocol struct
 pub trait MessageBuilder {
     /// build a usb message
-    fn build_message(&self) -> Message;
+    fn build_message(&self) -> UsbMessage;
 }
 
 /// Representation of a USB protocol message
-pub struct Message {
+pub struct UsbMessage {
     pub id: u8,
     pub err: u8,
     pub payload: Vec<u8>,
 }
 
 pub struct UsbProtocol {
-    handle: Option<thread::JoinHandle<()>>,
-    listeners: Arc<Mutex<HashMap<u8, mpsc::Sender<Message>>>>,
-    tx_channel_sender: mpsc::Sender<Message>,
-    rx_channel_receiver: mpsc::Receiver<Message>,
+    // handle: Option<thread::JoinHandle<()>>,
+    listeners: Arc<Mutex<HashMap<u8, mpsc::Sender<UsbMessage>>>>,
+    tx_channel_sender: mpsc::Sender<UsbMessage>,
+    rx_channel_receiver: mpsc::Receiver<UsbMessage>,
 }
 
-impl Message {
-    pub fn new(msg_id: u8, payload: Vec<u8>) -> Result<Message, &'static str> {
+impl UsbMessage {
+    pub fn new(msg_id: u8, payload: Vec<u8>) -> Result<UsbMessage, &'static str> {
         if payload.len() > MAX_PL_LEN {
             return Err("Payload too large");
         }
 
-        Ok(Message {
+        Ok(UsbMessage {
             id: msg_id,
             err: 0,
-            payload: payload,
+            payload,
         })
     }
 
@@ -72,7 +72,7 @@ impl Message {
     }
 
     /// Construct a message from a byte slice received from the device
-    pub fn from_bytes(bytes: &[u8]) -> Option<Message> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<UsbMessage> {
         // Check Packet size
         if bytes.len() != PACKET_SIZE {
             return None;
@@ -90,7 +90,7 @@ impl Message {
 
         let payload_len = bytes[IDX_PL_LEN] as usize;
 
-        Some(Message {
+        Some(UsbMessage {
             id: bytes[IDX_ID],
             err: bytes[IDX_ERR],
             payload: bytes[IDX_PL..(IDX_PL + payload_len)].to_vec(),
@@ -98,10 +98,14 @@ impl Message {
     }
 }
 
-impl MessageBuilder for Message{
+impl MessageBuilder for UsbMessage {
     /// build a usb message
-    fn build_message(&self) -> Message {
-        Message { id: self.id, err: self.err, payload: self.payload.clone() }
+    fn build_message(&self) -> UsbMessage {
+        UsbMessage {
+            id: self.id,
+            err: self.err,
+            payload: self.payload.clone(),
+        }
     }
 }
 fn crc(data: &[u8]) -> u16 {
@@ -117,28 +121,29 @@ impl UsbProtocol {
 
         match port_result {
             Ok(mut port) => {
-                let listeners: Arc<Mutex<HashMap<u8, mpsc::Sender<Message>>>> = Arc::new(Mutex::new(HashMap::new()));
+                let listeners: Arc<Mutex<HashMap<u8, mpsc::Sender<UsbMessage>>>> =
+                    Arc::new(Mutex::new(HashMap::new()));
                 let thread_listeners = listeners.clone();
 
-                let (tx_ch_sender, tx_ch_receiver) = mpsc::channel::<Message>();
-                let (rx_ch_sender, rx_ch_receiver) = mpsc::channel::<Message>();
-                
+                let (tx_ch_sender, tx_ch_receiver) = mpsc::channel::<UsbMessage>();
+                let (rx_ch_sender, rx_ch_receiver) = mpsc::channel::<UsbMessage>();
+
                 // Start listening for incoming messages
                 // This function will spawn a thread that runs endlessly
                 // The thread will wait for messages on the TX channel (used for direct transfers)
                 // Each received USB message will be analyzed; if it is an answer to a transfer message,
                 // it is returned on the RX channel. If it matches a registered listener,
                 // it will be relayed to that listeners channel instead.
-                let handle = Some(thread::spawn(move || {
+                Some(thread::spawn(move || {
                     let mut read_buffer: Vec<u8> = vec![0; PACKET_SIZE];
 
                     struct Answer {
                         cmd_id: u8,
                         pending: bool,
                     }
-                    let mut answer: Answer = Answer{
+                    let mut answer: Answer = Answer {
                         cmd_id: 0,
-                        pending: false
+                        pending: false,
                     };
 
                     loop {
@@ -146,16 +151,18 @@ impl UsbProtocol {
                         if !answer.pending {
                             if let Ok(tx_msg) = tx_ch_receiver.try_recv() {
                                 let write_buffer = tx_msg.to_bytes();
-                                port
-                                    .write(&write_buffer) // blocks
+                                port.write(&write_buffer) // blocks
                                     .unwrap();
                                 // TODO: add error checking
-                                log::debug!("Sending message: ID 0x{:02X} Payload {:?}", tx_msg.id, tx_msg.payload);
-                                
+                                log::debug!(
+                                    "Sending message: ID 0x{:02X} Payload {:?}",
+                                    tx_msg.id,
+                                    tx_msg.payload
+                                );
+
                                 // expect to received a answer
                                 answer.pending = true;
                                 answer.cmd_id = tx_msg.id;
-   
                             }
                         }
 
@@ -164,10 +171,10 @@ impl UsbProtocol {
                         if available_bytes >= PACKET_SIZE as u32 {
                             port.read(&mut read_buffer) // blocks
                                 .unwrap();
-                            match Message::from_bytes(&read_buffer) {
+                            match UsbMessage::from_bytes(&read_buffer) {
                                 Some(msg) => {
                                     // check if we are waiting for an answer, otherwise check for registered listeners
-                                    if answer.pending && (answer.cmd_id == msg.id){
+                                    if answer.pending && (answer.cmd_id == msg.id) {
                                         log::debug!(
                                             "Got Answer for message: ID 0x{:02X} Err 0x{:02X} Payload {:?}",
                                             &msg.id, &msg.err, &msg.payload
@@ -195,11 +202,11 @@ impl UsbProtocol {
                             }
                         }
                     }
-                }));  // End of receive thread
-                
+                })); // End of receive thread
+
                 Ok(UsbProtocol {
-                    handle: handle,
-                    listeners: listeners,
+                    // handle,
+                    listeners,
                     tx_channel_sender: tx_ch_sender,
                     rx_channel_receiver: rx_ch_receiver,
                 })
@@ -212,8 +219,11 @@ impl UsbProtocol {
     }
 
     /// Transfers a USB Message and returns the answer
-    pub fn transfer<T: MessageBuilder>(&mut self, builder: &T, timeout: Duration) -> Result<Message, String> {
-        
+    pub fn transfer<T: MessageBuilder>(
+        &mut self,
+        builder: &T,
+        timeout: Duration,
+    ) -> Result<UsbMessage, String> {
         let msg = builder.build_message();
 
         self.tx_channel_sender.send(msg).unwrap();
@@ -221,17 +231,18 @@ impl UsbProtocol {
         match self.rx_channel_receiver.recv_timeout(timeout) {
             Ok(msg) => Ok(msg),
             Err(err) => Err(String::from(format!(
-                "Timeout waiting for an answer ({:?})", err)
-            )),
+                "Timeout waiting for an answer ({:?})",
+                err
+            ))),
         }
     }
 
-    /// Add a listener for a specific command ID. 
+    /// Add a listener for a specific command ID.
     /// If a listener for the supplied ID is already registered, it is overwritten
     /// Params:
     /// - cmd_id: ID of the message to listen for
-    /// - channel: a mpsc channel on which the received USB message is releayed. 
-    pub fn add_listener(&mut self, cmd_id: u8, channel: mpsc::Sender<Message>) {
+    /// - channel: a mpsc channel on which the received USB message is relayed.
+    pub fn add_listener(&mut self, cmd_id: u8, channel: mpsc::Sender<UsbMessage>) {
         let mut listeners = self.listeners.lock().unwrap();
 
         listeners.insert(cmd_id, channel);
@@ -241,7 +252,6 @@ impl UsbProtocol {
 
 #[cfg(test)]
 mod tests {
-    use crate::bridge::CmdCodes;
 
     use super::*;
 
@@ -253,7 +263,7 @@ mod tests {
 
     #[test]
     fn create_msg() {
-        let msg = Message::new(2, vec![0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16]).unwrap();
+        let msg = UsbMessage::new(2, vec![0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16]).unwrap();
 
         assert_eq!(msg.id, 2);
         assert_eq!(msg.err, 0);
@@ -262,12 +272,12 @@ mod tests {
 
     #[test]
     fn create_msg_err() {
-        assert!(Message::new(2, vec![0; 59]).is_err());
+        assert!(UsbMessage::new(2, vec![0; 59]).is_err());
     }
 
     #[test]
     fn to_bytes() {
-        let msg = Message::new(2, vec![0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16]).unwrap();
+        let msg = UsbMessage::new(2, vec![0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16]).unwrap();
         let bytes = msg.to_bytes();
         let expected_bytes = [
             vec![105, 2, 0, 7, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16],
@@ -279,7 +289,7 @@ mod tests {
         assert_eq!(bytes, expected_bytes);
 
         // Edge case: No padding bytes in payload
-        let msg = Message::new(2, vec![0x00; MAX_PL_LEN]).unwrap();
+        let msg = UsbMessage::new(2, vec![0x00; MAX_PL_LEN]).unwrap();
         let bytes = msg.to_bytes();
 
         assert_eq!(bytes.len(), PACKET_SIZE);
@@ -301,7 +311,7 @@ mod tests {
             vec![0xD8, 0x06],
         ]
         .concat();
-        let msg = Message::from_bytes(&bytes).unwrap();
+        let msg = UsbMessage::from_bytes(&bytes).unwrap();
         assert_eq!(msg.id, 2);
         assert_eq!(msg.err, 3);
         assert_eq!(msg.payload.len(), 7);
@@ -310,13 +320,13 @@ mod tests {
 
     #[test]
     #[ignore]
-    /// This test needs manual interaction and a connected device. 
-    /// Once the test is started the "test" button on the device must be pressed within 3 seconds, 
+    /// This test needs manual interaction and a connected device.
+    /// Once the test is started the "test" button on the device must be pressed within 3 seconds,
     /// which sends a message with ID CMD_IRQ (0x80) to the host
     fn irq() {
         let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0")).unwrap();
 
-        let (rx_sender, rx_receiver) = mpsc::channel::<Message>();
+        let (rx_sender, rx_receiver) = mpsc::channel::<UsbMessage>();
 
         prot.add_listener(0x80 as u8, rx_sender);
 
@@ -333,7 +343,7 @@ mod tests {
     fn transfer() {
         let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0")).unwrap();
 
-        let msg = Message::new(0x10, vec![]).unwrap();
+        let msg = UsbMessage::new(0x10, vec![]).unwrap();
         match prot.transfer(&msg, Duration::from_millis(500)) {
             Ok(received) => println!("Got Answer, result code: 0x{:02X}", received.err),
             Err(e) => println!("ERROR:  {:?}", e),
