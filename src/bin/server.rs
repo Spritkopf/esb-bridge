@@ -30,10 +30,9 @@ fn main() {
         }
     }
 
-
+    
     let bridge_version = my_bridge.get_firmware_version().expect("Failed to read Firmware version");
     log::info!("esb-bridge firmware version: {bridge_version}");
-
     // log::info!("Starting esb-bridge server on port {}...", args.port);
     
 }
