@@ -1,5 +1,11 @@
+
+
+use std::time::Duration;
+
 use clap::Parser;
-use esb_bridge::esb_bridge::Bridge;
+use serialport;
+use esb_bridge::bridge::Bridge;
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -20,16 +26,16 @@ fn main() {
     let args = Args::parse();
 
     println!("Connecting to device {}", args.device);
-    let bridge = Bridge::new(args.device, args.port).expect("Could not open Serial Port");
+    let mut my_bridge = Bridge::new(args.device, args.port);
 
-    let bridge_version = bridge::get_firmware_version().expect("Failed to read Firmware version");
-    println!("esb-bridge firmware version: {bridge_version}");
-
+    
+    
     println!("Starting esb-bridge server...");
     println!("Listening to port {:?}", args.port);
     println!("Verbosity level: {:?}", args.verbose);
-
-
     
+    let bridge_version = my_bridge.get_firmware_version().expect("Failed to read Firmware version");
+    println!("esb-bridge firmware version: {bridge_version}");
+    let test = my_bridge.transfer().unwrap();
     
 }

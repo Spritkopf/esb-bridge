@@ -1,4 +1,5 @@
-pub mod esb_bridge;
+pub mod bridge;
+
 
 pub fn test() {
     println!("Test");
