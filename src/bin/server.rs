@@ -1,5 +1,7 @@
 
 
+use std::process::exit;
+
 use env_logger;
 use log;
 use clap::Parser;
@@ -19,11 +21,19 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+    let mut my_bridge: Bridge;
 
     env_logger::init();
 
     log::info!("Connecting to device {}", args.device);
-    let mut my_bridge = Bridge::new(args.device, args.port);
+    match Bridge::new(args.device, args.port) {
+        Ok(bridge) => my_bridge = bridge,
+        Err(msg) => {
+            log::error!("Error opening connection to Bridge device: {}", msg);
+            exit(-1);
+        }
+    }
+
 
     let bridge_version = my_bridge.get_firmware_version().expect("Failed to read Firmware version");
     log::info!("esb-bridge firmware version: {bridge_version}");

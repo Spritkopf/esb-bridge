@@ -24,12 +24,12 @@ pub struct Bridge {
 }
 
 impl Bridge {
-    pub fn new(device: String, port: u32) -> Bridge {
+    pub fn new(device: String, port: u32) -> Result<Bridge, String> {
 
-        Bridge { 
-            usb_protocol: UsbProtocol::new(device),
-            port: port, 
-        }
+        Ok(Bridge {
+            usb_protocol: UsbProtocol::new(device)?, 
+            port: port
+        })
     }
 
     pub fn get_firmware_version(&mut self) -> Result<String, String> {

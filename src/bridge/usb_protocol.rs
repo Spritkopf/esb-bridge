@@ -79,12 +79,12 @@ impl Message {
             return None;
         }
 
-        let payload_len = bytes[3] as usize;
+        let payload_len = bytes[IDX_PL_LEN] as usize;
 
         Some(Message {
             id: bytes[IDX_ID],
             err: bytes[IDX_ERR],
-            payload: bytes[IDX_PL..IDX_PL + payload_len].to_vec(),
+            payload: bytes[IDX_PL..(IDX_PL + payload_len)].to_vec(),
         })
     }
 }
@@ -95,13 +95,20 @@ fn crc(data: &[u8]) -> u16 {
 
 impl UsbProtocol {
     /// Creates a new UsbProtocol instance and returns it
-    pub fn new(device: String) -> UsbProtocol {
-        UsbProtocol{
-            serial_port: serialport::new(device, SERIAL_PORT_BAUDRATE)
+    pub fn new(device: String) -> Result<Self, String> {
+
+        let port_result = serialport::new(&device, SERIAL_PORT_BAUDRATE)
             .timeout(Duration::from_millis(SERIAL_PORT_TIMEOUT))
-            .open()
-            .unwrap(),
-            listeners: vec![]
+            .open();
+
+        match port_result {
+            Ok(port) => Ok(
+                            UsbProtocol {
+                                serial_port: port,
+                                listeners: Vec::new(),
+                            }
+                        ),
+            Err(_) => Err(String::from(format!("Unable to open serial port {}", device)))
         }
     }
 
@@ -116,7 +123,7 @@ impl UsbProtocol {
         
         log::debug!("Written bytes: {:?}", num_tx);
 
-        let mut read_buffer: Vec<u8> = vec![0; 64];
+        let mut read_buffer: Vec<u8> = vec![0; PACKET_SIZE];
 
         let n = self.serial_port
             .read(&mut read_buffer) // blocks
