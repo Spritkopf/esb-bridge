@@ -21,6 +21,15 @@ const IDX_CRC: usize = PACKET_SIZE - CRC_SIZE;
 const SERIAL_PORT_BAUDRATE: u32 = 9600;
 const SERIAL_PORT_TIMEOUT: u64 = 100;
 
+/// Trait for building a usb message
+/// Any type implementing this trait can directly be used with the transfer method of
+/// the UsbProtocol struct
+pub trait MessageBuilder {
+    /// build a usb message
+    fn build_message(&self) -> Message;
+}
+
+
 /// Representation of a USB protocol message
 pub struct Message {
     pub id: u8,
@@ -90,6 +99,12 @@ impl Message {
     }
 }
 
+impl MessageBuilder for Message{
+    /// build a usb message
+    fn build_message(&self) -> Message {
+        Message { id: self.id, err: self.err, payload: self.payload.clone() }
+    }
+}
 fn crc(data: &[u8]) -> u16 {
     crc16::State::<crc16::CCITT_FALSE>::calculate(data)
 }
@@ -196,8 +211,10 @@ impl UsbProtocol {
     }
 
     /// Transfers a USB Message and returns the answer
-    pub fn transfer(&mut self, msg: Message, timeout: Duration) -> Result<Message, String> {
+    pub fn transfer<T: MessageBuilder>(&mut self, builder: &T, timeout: Duration) -> Result<Message, String> {
         
+        let msg = builder.build_message();
+
         self.tx_channel_sender.send(msg).unwrap();
 
         match self.rx_channel_receiver.recv_timeout(timeout) {
@@ -294,13 +311,13 @@ mod tests {
     #[ignore]
     /// This test needs manual interaction and a connected device. 
     /// Once the test is started the "test" button on the device must be pressed within 3 seconds, 
-    /// which sends a message with ID CMD_IRQ to the host
+    /// which sends a message with ID CMD_IRQ (0x80) to the host
     fn irq() {
         let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0")).unwrap();
 
         let (rx_sender, rx_receiver) = mpsc::channel::<Message>();
 
-        prot.add_listener(CmdCodes::CmdIrq as u8, rx_sender);
+        prot.add_listener(0x80 as u8, rx_sender);
 
         match rx_receiver.recv_timeout(Duration::from_secs(3)) {
             Ok(received) => println!("Got: {:?}", received.to_bytes()),
@@ -315,8 +332,8 @@ mod tests {
     fn transfer() {
         let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0")).unwrap();
 
-        let msg = Message::new(0x12, vec![]).unwrap();
-        match prot.transfer(msg, Duration::from_millis(500)) {
+        let msg = Message::new(0x10, vec![]).unwrap();
+        match prot.transfer(&msg, Duration::from_millis(500)) {
             Ok(received) => println!("Got Answer, result code: 0x{:02X}", received.err),
             Err(e) => println!("ERROR:  {:?}", e),
         }
