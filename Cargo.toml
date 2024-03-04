@@ -9,4 +9,6 @@ edition = "2021"
 crc16 = "*"
 clap = { version = "3.1.12", features = ["derive"] }
 serialport = { version = "4.3.0", default-features = false }
+log = "0.4.20"
+env_logger = "0.11.0"
 

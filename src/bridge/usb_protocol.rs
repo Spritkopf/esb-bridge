@@ -1,4 +1,7 @@
+use std::time::Duration;
+use serialport::SerialPort;
 use crc16;
+use log;
 
 const PACKET_SIZE: usize = 64;
 const HEADER_SIZE: usize = 4;
@@ -13,11 +16,24 @@ const IDX_PL_LEN: usize = 3;
 const IDX_PL: usize = 4;
 const IDX_CRC: usize = PACKET_SIZE - CRC_SIZE;
 
+const SERIAL_PORT_BAUDRATE: u32 = 9600;
+const SERIAL_PORT_TIMEOUT: u64 = 100;
+
 /// Representation of a USB protocol message
 pub struct Message {
     pub id: u8,
     pub err: u8,
     pub payload: Vec<u8>,
+}
+
+pub struct UsbProtocol {
+    serial_port: Box<dyn SerialPort>,
+    listeners: Vec<Listener>,
+}
+
+struct Listener {
+    cmd_id: u8,
+    channel: u8,
 }
 
 impl Message {
@@ -41,7 +57,7 @@ impl Message {
         ]
         .concat();
         let checksum = crc(&data);
-        println!("Calculated checksum: {:X}", checksum);
+        log::debug!("Calculated checksum: {:X}", checksum);
         data.push(checksum as u8);
         data.push((checksum >> 8) as u8);
         data
@@ -75,6 +91,47 @@ impl Message {
 
 fn crc(data: &[u8]) -> u16 {
     crc16::State::<crc16::CCITT_FALSE>::calculate(data)
+}
+
+impl UsbProtocol {
+    /// Creates a new UsbProtocol instance and returns it
+    pub fn new(device: String) -> UsbProtocol {
+        UsbProtocol{
+            serial_port: serialport::new(device, SERIAL_PORT_BAUDRATE)
+            .timeout(Duration::from_millis(SERIAL_PORT_TIMEOUT))
+            .open()
+            .unwrap(),
+            listeners: vec![]
+        }
+    }
+
+    /// Transfers a USB Message and returns the answer
+    pub fn transfer(&mut self, msg: Message) -> Result<Message, String> {
+        let write_buffer = msg.to_bytes();
+
+        // Write to serial port
+        let num_tx = self.serial_port
+            .write(&write_buffer) // blocks
+            .unwrap();
+        
+        log::debug!("Written bytes: {:?}", num_tx);
+
+        let mut read_buffer: Vec<u8> = vec![0; 64];
+
+        let n = self.serial_port
+            .read(&mut read_buffer) // blocks
+            .unwrap();
+
+        log::debug!("Read bytes: {:?} {:?}", n, &read_buffer[..n]);
+        
+        let answer_msg = Message::from_bytes(&read_buffer);
+
+        match answer_msg {
+            Some(msg) => Ok(msg),
+            None => Err(String::from(format!("Got no valid answer for request with ID {:?}", msg.id)))
+        }
+    }
+
 }
 
 #[cfg(test)]
