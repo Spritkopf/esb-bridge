@@ -29,7 +29,6 @@ pub trait MessageBuilder {
     fn build_message(&self) -> Message;
 }
 
-
 /// Representation of a USB protocol message
 pub struct Message {
     pub id: u8,
@@ -174,6 +173,7 @@ impl UsbProtocol {
                                             &msg.id, &msg.err, &msg.payload
                                         );
                                         rx_ch_sender.send(msg).unwrap();
+                                        answer.pending = false;
                                     } else {
                                         let l = thread_listeners.lock().unwrap();
                                         match l.get(&msg.id) {
@@ -195,7 +195,8 @@ impl UsbProtocol {
                             }
                         }
                     }
-                }));
+                }));  // End of receive thread
+                
                 Ok(UsbProtocol {
                     handle: handle,
                     listeners: listeners,
@@ -229,7 +230,7 @@ impl UsbProtocol {
     /// If a listener for the supplied ID is already registered, it is overwritten
     /// Params:
     /// - cmd_id: ID of the message to listen for
-    /// - channel: a mpsc channel on which the received message is releayed. 
+    /// - channel: a mpsc channel on which the received USB message is releayed. 
     pub fn add_listener(&mut self, cmd_id: u8, channel: mpsc::Sender<Message>) {
         let mut listeners = self.listeners.lock().unwrap();
 

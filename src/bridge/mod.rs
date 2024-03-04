@@ -3,10 +3,9 @@ mod usb_protocol;
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
-use usb_protocol::{UsbProtocol,Message};
+use usb_protocol::{UsbProtocol,Message, MessageBuilder};
 
 use crate::esb::EsbMessage;
-
 
 enum CmdCodes {
     CmdVersion     = 0x10,   // Get firmware version
@@ -15,6 +14,17 @@ enum CmdCodes {
     _CmdTest        = 0x61,   // test command, do not use
     _CmdIrq         = 0x80,   // interrupt callback, only from device to host
     CmdRx          = 0x81,   // callback from incoming ESB message
+}
+
+impl MessageBuilder for EsbMessage {
+    fn build_message(&self) -> Message {
+        let payload = [self.address.clone().to_vec(),vec![self.id, self.err], self.payload.clone()].concat();
+        Message{
+            id: CmdCodes::CmdTransfer as u8,
+            err: 0,
+            payload: payload
+        }
+    }
 }
 
 pub struct Bridge {
@@ -72,6 +82,15 @@ impl Bridge {
        Err(String::from("Not implemented yet"))
     }
 
+    /// Set the ESB central address for the connected Bridge device
+    /// The central address is the pipeline address the bridge listens on for incoming notifications from peripheral
+    /// devices
+    /// params:
+    /// - addr: 5-byte ESB pipeline address
+    fn set_central_address(&mut self, addr: &[u8;5]) -> Result<(), String>{
+       Err(String::from("Not implemented yet"))
+    }
+
     /// Register a listener for specific type ESB message
     /// If a listener for the supplied ID is already registered, it is overwritten
     /// Params:
@@ -98,5 +117,19 @@ mod tests {
         let mut bridge = Bridge::new(String::from("/dev/ttyACM0")).unwrap();
 
         println!("Version: {}", bridge.get_firmware_version().unwrap());
+    }
+
+    #[test]
+    fn build_usb_message() {
+        let msg = EsbMessage {
+            address: [0xde, 0xad, 0xbe, 0xef, 0x00],
+            id: 0x10,
+            err: 0x00,
+            payload: vec![1,2,3,4,5,6]
+        };
+    
+        let usbmsg = msg.build_message();
+
+        assert_eq!(usbmsg.to_bytes(), [0x30, 0, 11])
     }
 }
