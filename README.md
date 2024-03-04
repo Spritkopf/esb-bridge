@@ -5,14 +5,14 @@ This is work in progress and not considered functional, as long as this notice e
 
 ## package contents
 
-### esb_bridge --- PLANNED
+### esb_bridge --- IN PROGRESS
 Library crate containing the logic communicating with the firmware to transfer ESB messages to targets, and to receive 
 incoming ESB messages
 
 ### usbprotocol
 Module that handles USB serial connection to the esb-bridge-fw (device running the firmware). Used by esbbridge crate
 
-### Server -- PLANNED
+### Server -- IN PROGRESS
 Binary crate; CLI tool that provides an interface to the esb bridge over the network (TCP socket). 
 This is necessary because only one process can access the USB serial port. Also, there is only one physical instance of 
 this device connected to the PC running the server, but there may be several nodes distributed across the network which 
@@ -28,9 +28,9 @@ May be extended in the future to be a binary create to provide a CLI tool...
 The server is the only component of this repository which is intended to run directly
 Examples below: ESB bridge device on /dev/ttyACM0, server on port 9815
 
-### Run executable of the server -- PLANNED
+### Run executable of the server
 ```
-$ cargo run -d /dev/ttyACM0 -p 9815
+$ cargo run --bin server -- --device /dev/ttyACM0 --port 9815
 ```
 
 ### Docker -- PLANNED
