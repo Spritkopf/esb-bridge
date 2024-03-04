@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-use std::{thread, sync};
-use std::time::Duration;
-use std::sync::{mpsc, Arc, Mutex};
-use serialport::SerialPort;
 use crc16;
 use log;
+use std::collections::HashMap;
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
+use std::thread;
 
 const PACKET_SIZE: usize = 64;
 const HEADER_SIZE: usize = 4;
@@ -33,6 +32,8 @@ pub struct UsbProtocol {
     device: String,
     handle: Option<thread::JoinHandle<()>>,
     listeners: Arc<Mutex<HashMap<u8, mpsc::Sender<Message>>>>,
+    tx_channel_sender: mpsc::Sender<Message>,
+    rx_channel_receiver: mpsc::Receiver<Message>,
 }
 
 impl Message {
@@ -40,6 +41,7 @@ impl Message {
         if payload.len() > MAX_PL_LEN {
             return Err("Payload too large");
         }
+
         Ok(Message {
             id: msg_id,
             err: 0,
@@ -74,7 +76,8 @@ impl Message {
         }
 
         // Check CRC
-        if crc(&bytes[..IDX_CRC]) != (((bytes[IDX_CRC+1] as u16) << 8) | (bytes[IDX_CRC] as u16)) {
+        if crc(&bytes[..IDX_CRC]) != (((bytes[IDX_CRC + 1] as u16) << 8) | (bytes[IDX_CRC] as u16))
+        {
             return None;
         }
 
@@ -94,97 +97,130 @@ fn crc(data: &[u8]) -> u16 {
 
 impl UsbProtocol {
     /// Creates a new UsbProtocol instance and returns it
-    pub fn new(device: String) -> UsbProtocol {
-        UsbProtocol{
-            device: device,
-            handle: None,
-            listeners: Arc::new(Mutex::new(HashMap::new())),
-        }
-        
-    }
-
-    /// Start listening for incoming messages
-    /// This function will spawn a thread that runs close() is called. 
-    /// Each received USB message will be analyzed and if it matches a registered listener, 
-    /// it will be relayed to that listeners channel
-    pub fn start(&mut self) -> Result<(),String>{
-        
-        let port_result = serialport::new(&self.device, SERIAL_PORT_BAUDRATE)
+    pub fn new(device: String) -> Result<UsbProtocol, String> {
+        let port_result = serialport::new(&device, SERIAL_PORT_BAUDRATE)
             .timeout(Duration::from_millis(SERIAL_PORT_TIMEOUT))
             .open();
-        
+
         match port_result {
             Ok(mut port) => {
-                //let (usb_rx, usb_tx) = mpsc::channel::<Message>();
-                
-                let listeners = self.listeners.clone();
+                let listeners: Arc<Mutex<HashMap<u8, mpsc::Sender<Message>>>> = Arc::new(Mutex::new(HashMap::new()));
+                let thread_listeners = listeners.clone();
 
-                self.handle = Some(thread::spawn(move || {
+                let (tx_ch_sender, tx_ch_receiver) = mpsc::channel::<Message>();
+                let (rx_ch_sender, rx_ch_receiver) = mpsc::channel::<Message>();
+                
+                // Start listening for incoming messages
+                // This function will spawn a thread that runs endlessly
+                // The thread will wait for messages on the TX channel (used for direct transfers)
+                // Each received USB message will be analyzed; if it is an answer to a transfer message,
+                // it is returned on the RX channel. If it matches a registered listener,
+                // it will be relayed to that listeners channel instead.
+                let handle = Some(thread::spawn(move || {
                     let mut read_buffer: Vec<u8> = vec![0; PACKET_SIZE];
 
-                    loop{
-                        let n = port.read(&mut read_buffer) // blocks
-                        .unwrap();
-                        match Message::from_bytes(&read_buffer){
-                            Some(msg) => {
-                                {
-                                    let l = listeners.lock().unwrap();
-                                    match l.get(&msg.id){
-                                        Some(listen_channel) => {
-                                            log::debug!("Got message for listener with CMD {}", &msg.id);
-                                            listen_channel.send(msg).unwrap();
+                    struct Answer {
+                        cmd_id: u8,
+                        pending: bool,
+                    }
+                    let mut answer: Answer = Answer{
+                        cmd_id: 0,
+                        pending: false
+                    };
 
+                    loop {
+                        // see if there is a message available for transfer
+                        if !answer.pending {
+                            if let Ok(tx_msg) = tx_ch_receiver.try_recv() {
+                                let write_buffer = tx_msg.to_bytes();
+                                port
+                                    .write(&write_buffer) // blocks
+                                    .unwrap();
+                                // TODO: add error checking
+                                log::debug!("Sending message: ID 0x{:02X} Payload {:?}", tx_msg.id, tx_msg.payload);
+                                
+                                // expect to received a answer
+                                answer.pending = true;
+                                answer.cmd_id = tx_msg.id;
+   
+                            }
+                        }
+
+                        // check incoming messages
+                        let available_bytes = port.bytes_to_read().unwrap();
+                        if available_bytes >= PACKET_SIZE as u32 {
+                            port.read(&mut read_buffer) // blocks
+                                .unwrap();
+                            match Message::from_bytes(&read_buffer) {
+                                Some(msg) => {
+                                    // check if we are waiting for an answer, otherwise check for registered listeners
+                                    if answer.pending && (answer.cmd_id == msg.id){
+                                        log::debug!(
+                                            "Got Answer for message: ID 0x{:02X} Err 0x{:02X} Payload {:?}",
+                                            &msg.id, &msg.err, &msg.payload
+                                        );
+                                        rx_ch_sender.send(msg).unwrap();
+                                    } else {
+                                        let l = thread_listeners.lock().unwrap();
+                                        match l.get(&msg.id) {
+                                            Some(listen_channel) => {
+                                                log::debug!(
+                                                    "Got message for listener with CMD {}",
+                                                    &msg.id
+                                                );
+                                                listen_channel.send(msg).unwrap();
+                                            }
+                                            None => log::debug!(
+                                                "Got message but no listener registered for CMD 0x{:02X}",
+                                                msg.id
+                                            ),
                                         }
-                                        None => log::debug!("Got message but no listener registered for CMD {:02X}", msg.id),
-            
                                     }
                                 }
-                            },
-                            None => log::debug!("Discarding invalid message"),
+                                None => log::debug!("Discarding invalid message"),
+                            }
                         }
                     }
                 }));
-                Ok(())
-            },
-            Err(_) => Err(String::from(format!("Unable to open serial port {}", self.device)))
+                Ok(UsbProtocol {
+                    device: device,
+                    handle: handle,
+                    listeners: listeners,
+                    tx_channel_sender: tx_ch_sender,
+                    rx_channel_receiver: rx_ch_receiver,
+                })
+            }
+            Err(_) => Err(String::from(format!(
+                "Unable to open serial port {}",
+                device
+            ))),
         }
     }
 
     /// Transfers a USB Message and returns the answer
-    pub fn transfer(&mut self, msg: Message) -> Result<Message, String> {
-        // let write_buffer = msg.to_bytes();
-
-        // // Write to serial port
-        // let num_tx = self.serial_port
-        //     .write(&write_buffer) // blocks
-        //     .unwrap();
+    pub fn transfer(&mut self, msg: Message, timeout: Duration) -> Result<Message, String> {
         
-        // log::debug!("Written bytes: {:?}", num_tx);
+        self.tx_channel_sender.send(msg).unwrap();
 
-        let mut read_buffer: Vec<u8> = vec![0; PACKET_SIZE];
-
-        // let n = self.serial_port
-        //     .read(&mut read_buffer) // blocks
-        //     .unwrap();
-
-        // log::debug!("Read bytes: {:?} {:?}", n, &read_buffer[..n]);
-        
-        let answer_msg = Message::from_bytes(&read_buffer);
-
-        match answer_msg {
-            Some(msg) => Ok(msg),
-            None => Err(String::from(format!("Got no valid answer for request with ID {:?}", msg.id)))
+        match self.rx_channel_receiver.recv_timeout(timeout) {
+            Ok(msg) => Ok(msg),
+            Err(err) => Err(String::from(format!(
+                "Timeout waiting for an answer ({:?})", err)
+            )),
         }
     }
 
+    /// Add a listener for a specific command ID. 
+    /// If a listener for the supplied ID is already registered, it is overwritten
+    /// Params:
+    /// - cmd_id: ID of the message to listen for
+    /// - channel: a mpsc channel on which the received message is releayed. 
     pub fn add_listener(&mut self, cmd_id: u8, channel: mpsc::Sender<Message>) {
-
         let mut listeners = self.listeners.lock().unwrap();
 
         listeners.insert(cmd_id, channel);
-        log::info!("Registered listener for cmd_id {:02X}", cmd_id);
+        log::info!("Registered listener for cmd_id 0x{:02X}", cmd_id);
     }
-
 }
 
 #[cfg(test)]
@@ -220,11 +256,11 @@ mod tests {
         let expected_bytes = [
             vec![105, 2, 0, 7, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16],
             vec![0x00; 51],
-            vec![0x28, 0xDB]
-        ].concat();
+            vec![0x28, 0xDB],
+        ]
+        .concat();
         assert_eq!(bytes.len(), PACKET_SIZE);
         assert_eq!(bytes, expected_bytes);
-    
 
         // Edge case: No padding bytes in payload
         let msg = Message::new(2, vec![0x00; MAX_PL_LEN]).unwrap();
@@ -258,20 +294,33 @@ mod tests {
 
     #[test]
     #[ignore]
-    /// This test needs manual interaction. Once the test is started the "test" button on the
-    /// device must be pressed within 3 seconds, which sends a message with ID CMD_IRQ to the host
+    /// This test needs manual interaction and a connected device. 
+    /// Once the test is started the "test" button on the device must be pressed within 3 seconds, 
+    /// which sends a message with ID CMD_IRQ to the host
     fn irq() {
-        let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0"));
-        prot.start().unwrap();
+        let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0")).unwrap();
 
         let (rx_sender, rx_receiver) = mpsc::channel::<Message>();
 
         prot.add_listener(CmdCodes::CmdIrq as u8, rx_sender);
 
-        match rx_receiver.recv() {
+        match rx_receiver.recv_timeout(Duration::from_secs(3)) {
             Ok(received) => println!("Got: {:?}", received.to_bytes()),
-            Err(e) => println!("ERROR!!!! {:?}", e)
+            Err(e) => println!("ERROR:  {:?}", e),
         }
-     }  
+    }
 
+    #[test]
+    #[ignore]
+    /// This test needs a connected device. A normal transfer is tested with Command ID 0x10, which
+    /// is the firmware version in case of the ESB-bridge firmware
+    fn transfer() {
+        let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0")).unwrap();
+
+        let msg = Message::new(0x12, vec![]).unwrap();
+        match prot.transfer(msg, Duration::from_millis(500)) {
+            Ok(received) => println!("Got Answer, result code: 0x{:02X}", received.err),
+            Err(e) => println!("ERROR:  {:?}", e),
+        }
+    }
 }
