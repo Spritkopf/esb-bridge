@@ -9,6 +9,7 @@ use crate::esb::EsbMessage;
 
 pub enum CmdCodes {
     CmdVersion = 0x10,  // Get firmware version
+    CmdSetCentralAddr = 0x21,  // Set central Pipeline address
     CmdTransfer = 0x30, // Transfer message
     CmdSend = 0x31,     // Send a message without waiting for a reply
     _CmdTest = 0x61,    // test command, do not use
@@ -61,7 +62,7 @@ impl Bridge {
     }
 
     /// Transfer an ESB message and return the answer
-    fn transfer(&mut self, msg: EsbMessage, timeout: Duration) -> Result<EsbMessage, String> {
+    pub fn transfer(&mut self, msg: EsbMessage, timeout: Duration) -> Result<EsbMessage, String> {
         match self.usb_protocol.transfer(&msg, timeout) {
             Ok(answer) => Ok(EsbMessage::from_usb_message(answer)),
             _ => Err(String::from("Error transmitting message")),
@@ -70,7 +71,7 @@ impl Bridge {
 
     /// Sends an ESB message
     /// This method does blindly send a message and can't verify its successful transmission
-    fn send(&mut self, msg: UsbMessage) -> Result<(), String> {
+    pub fn send(&mut self, msg: UsbMessage) -> Result<(), String> {
         Err(String::from("Not implemented yet"))
     }
 
@@ -79,7 +80,10 @@ impl Bridge {
     /// devices
     /// params:
     /// - addr: 5-byte ESB pipeline address
-    fn set_central_address(&mut self, addr: &[u8; 5]) -> Result<(), String> {
+    pub fn set_central_address(&mut self, addr: &[u8; 5]) -> Result<(), String> {
+        let msg = UsbMessage {
+            id: CmdCodes::CmdTransfer
+        }
         Err(String::from("Not implemented yet"))
     }
 
