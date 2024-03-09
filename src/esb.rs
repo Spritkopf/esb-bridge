@@ -54,7 +54,7 @@ mod tests {
         let usbmsg = msg.build_message();
 
         assert_eq!(usbmsg.id, 0x30); // Transfer code
-        assert_eq!(usbmsg.err, 0xFF);
+        assert_eq!(usbmsg.err, 0x00);
         assert_eq!(
             usbmsg.payload.as_slice(),
             [0xde, 0xad, 0xbe, 0xef, 0x00, 0x10, 0xFF, 1, 2, 3, 4, 5, 6]

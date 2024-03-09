@@ -7,14 +7,17 @@ use usb_protocol::{UsbMessage, UsbProtocol};
 
 use crate::esb::EsbMessage;
 
+/// Default timeout for USB commands that don't involve actual ESB communication
+const DEFAULT_TIMEOUT: Duration = Duration::from_millis(200);
+
 pub enum CmdCodes {
-    CmdVersion = 0x10,  // Get firmware version
-    CmdSetCentralAddr = 0x21,  // Set central Pipeline address
-    CmdTransfer = 0x30, // Transfer message
-    CmdSend = 0x31,     // Send a message without waiting for a reply
-    _CmdTest = 0x61,    // test command, do not use
-    _CmdIrq = 0x80,     // interrupt callback, only from device to host
-    CmdRx = 0x81,       // callback from incoming ESB message
+    CmdVersion = 0x10,        // Get firmware version
+    CmdSetCentralAddr = 0x21, // Set central Pipeline address
+    CmdTransfer = 0x30,       // Transfer message
+    CmdSend = 0x31,           // Send a message without waiting for a reply
+    _CmdTest = 0x61,          // test command, do not use
+    _CmdIrq = 0x80,           // interrupt callback, only from device to host
+    CmdRx = 0x81,             // callback from incoming ESB message
 }
 
 pub struct Bridge {
@@ -82,9 +85,15 @@ impl Bridge {
     /// - addr: 5-byte ESB pipeline address
     pub fn set_central_address(&mut self, addr: &[u8; 5]) -> Result<(), String> {
         let msg = UsbMessage {
-            id: CmdCodes::CmdTransfer
+            id: CmdCodes::CmdSetCentralAddr as u8,
+            err: 0x00,
+            payload: addr.to_vec(),
+        };
+
+        match self.usb_protocol.transfer(&msg, DEFAULT_TIMEOUT) {
+            Ok(_) => Ok(()),
+            _ => Err(String::from("Error setting central address message")),
         }
-        Err(String::from("Not implemented yet"))
     }
 
     /// Register a listener for specific type ESB message
