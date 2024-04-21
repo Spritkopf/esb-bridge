@@ -18,7 +18,7 @@ const IDX_PL_LEN: usize = 3;
 const IDX_PL: usize = 4;
 const IDX_CRC: usize = PACKET_SIZE - CRC_SIZE;
 
-const SERIAL_PORT_BAUDRATE: u32 = 9600;
+const SERIAL_PORT_BAUDRATE: u32 = 115200;
 const SERIAL_PORT_TIMEOUT: u64 = 100;
 
 /// Trait for building a usb message
