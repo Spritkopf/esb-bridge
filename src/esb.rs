@@ -3,6 +3,11 @@ use crate::bridge::{
     CmdCodes,
 };
 
+const ESB_PACKET_SIZE: usize = 32;
+const ESB_HEADER_SIZE: usize = 2;
+const ESB_MAX_PL_LEN: usize = ESB_PACKET_SIZE - ESB_HEADER_SIZE;
+
+
 pub struct EsbMessage {
     pub address: [u8; 5],
     pub id: u8,
@@ -11,6 +16,19 @@ pub struct EsbMessage {
 }
 
 impl EsbMessage {
+    pub fn new(target_addr:[u8;5], msg_id: u8, payload: Vec<u8>) -> Result<EsbMessage, String> {
+        if payload.len() > ESB_MAX_PL_LEN {
+            return Err(String::from("Payload too large"));
+        }
+
+        Ok(EsbMessage {
+            address: target_addr,
+            id: msg_id,
+            err: 0,
+            payload,
+        })
+    }
+
     pub fn from_usb_message(usb_msg: UsbMessage) -> EsbMessage {
         EsbMessage {
             address: [1, 2, 3, 4, 5],

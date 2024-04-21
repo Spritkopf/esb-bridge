@@ -74,7 +74,7 @@ impl Bridge {
 
     /// Sends an ESB message
     /// This method does blindly send a message and can't verify its successful transmission
-    pub fn send(&mut self, msg: UsbMessage) -> Result<(), String> {
+    pub fn send(&mut self, _msg: UsbMessage) -> Result<(), String> {
         Err(String::from("Not implemented yet"))
     }
 
@@ -84,11 +84,7 @@ impl Bridge {
     /// params:
     /// - addr: 5-byte ESB pipeline address
     pub fn set_central_address(&mut self, addr: &[u8; 5]) -> Result<(), String> {
-        let msg = UsbMessage {
-            id: CmdCodes::CmdSetCentralAddr as u8,
-            err: 0x00,
-            payload: addr.to_vec(),
-        };
+        let msg = UsbMessage::new(CmdCodes::CmdSetCentralAddr as u8, addr.to_vec()).unwrap();
 
         match self.usb_protocol.transfer(&msg, DEFAULT_TIMEOUT) {
             Ok(_) => Ok(()),
@@ -119,5 +115,19 @@ mod tests {
         let mut bridge = Bridge::new(String::from("/dev/ttyACM0")).unwrap();
 
         println!("Version: {}", bridge.get_firmware_version().unwrap());
+    }
+
+    /// This test tries to get the firmware version of a ESB peripheral device, testing the basic transmission of ESB messages
+    #[test]
+    #[ignore]
+    fn transfer() {
+        let mut bridge = Bridge::new(String::from("/dev/ttyACM0")).unwrap();
+
+        // DUT address 6F:6F:6F:6F:01, 0x10 is the GetFWVersion-Command of that device
+        let dut_addr: [u8; 5] = [0x6F,0x6F,0x6F,0x6F,0x01];
+        let msg = EsbMessage::new(dut_addr, 0x10, Vec::new()).unwrap();
+        let version = bridge.transfer(msg, Duration::from_millis(300)).unwrap();
+        println!("ESB Peripheral FW Version: {:?}", version.payload);
+
     }
 }
