@@ -3,6 +3,9 @@
 ## WORK IN PROGRESS
 This is work in progress and not considered functional, as long as this notice exists
 
+## Todo
+[ ] USB Message error codes enum
+
 ## package contents
 
 ### esb_bridge --- IN PROGRESS

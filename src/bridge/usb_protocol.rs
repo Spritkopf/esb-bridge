@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(bytes, expected_bytes);
 
         // Edge case: No padding bytes in payload
-        let msg = UsbMessage::new(2, vec![0x00; MAX_PL_LEN]).unwrap();
+        let msg = UsbMessage::new(2, vec![0x01; MAX_PL_LEN]).unwrap();
         let bytes = msg.to_bytes();
 
         assert_eq!(bytes.len(), PACKET_SIZE);
@@ -297,12 +297,28 @@ mod tests {
             bytes,
             [
                 vec![105, 2, 0, MAX_PL_LEN as u8],
-                vec![0x00; MAX_PL_LEN],
-                vec![0x63, 0x4C]
+                vec![0x01; MAX_PL_LEN],
+                vec![0xf8, 0x2e]
             ]
             .concat()
         );
+
+        // Edge case: empty payload
+        let msg = UsbMessage::new(2, Vec::new()).unwrap();
+        let bytes = msg.to_bytes();
+
+        assert_eq!(bytes.len(), PACKET_SIZE);
+        assert_eq!(
+            bytes,
+            [
+                vec![105, 2, 0, 0],
+                vec![0x00; MAX_PL_LEN],
+                vec![0x74, 0x61]
+            ]
+                .concat()
+        );
     }
+
     #[test]
     fn from_bytes() {
         let bytes = [

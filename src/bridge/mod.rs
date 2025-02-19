@@ -123,8 +123,8 @@ mod tests {
     fn transfer() {
         let mut bridge = Bridge::new(String::from("/dev/ttyACM0")).unwrap();
 
-        // DUT address 6F:6F:6F:6F:01, 0x10 is the GetFWVersion-Command of that device
-        let dut_addr: [u8; 5] = [0x6F,0x6F,0x6F,0x6F,0x01];
+        // DUT address 123:45:67.89:01, 0x10 is the GetFWVersion-Command of that device
+        let dut_addr: [u8; 5] = [123,45,67,89,1];
         let msg = EsbMessage::new(dut_addr, 0x10, Vec::new()).unwrap();
         let version = bridge.transfer(msg, Duration::from_millis(300)).unwrap();
         println!("ESB Peripheral FW Version: {:?}", version.payload);
