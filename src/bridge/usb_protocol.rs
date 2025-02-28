@@ -186,7 +186,7 @@ impl UsbProtocol {
                                         match l.get(&msg.id) {
                                             Some(listen_channel) => {
                                                 log::debug!(
-                                                    "Got message for listener with CMD {}",
+                                                    "Got message for listener with CMD {:02X}",
                                                     &msg.id
                                                 );
                                                 listen_channel.send(msg).unwrap();
@@ -344,7 +344,7 @@ mod tests {
 
         let (rx_sender, rx_receiver) = mpsc::channel::<UsbMessage>();
 
-        prot.add_listener(0x80 as u8, rx_sender);
+        prot.add_listener(0x81 as u8, rx_sender);
 
         match rx_receiver.recv_timeout(Duration::from_secs(3)) {
             Ok(received) => println!("Got: {:?}", received.to_bytes()),

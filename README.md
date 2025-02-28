@@ -5,6 +5,8 @@ This is work in progress and not considered functional, as long as this notice e
 
 ## Todo
 [ ] USB Message error codes enum
+[ ] ESB message build from usb: Error handling
+[X] Listener thread in ESB module for async RX messages
 
 ## package contents
 
