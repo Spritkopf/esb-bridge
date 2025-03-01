@@ -33,20 +33,27 @@ impl EsbMessage {
         })
     }
 
-    pub fn from_usb_message(usb_msg: UsbMessage) -> EsbMessage {
+    pub fn from_usb_message(usb_msg: UsbMessage) -> Result<EsbMessage, String> {
         let mut addr = [0; ESB_PIPE_ADDR_SIZE];
+        
+        if usb_msg.payload.len() < ESB_HEADER_SIZE {
+            return Err(String::from(format!("Can't build EsbMessage: Malformed USB packet")));
+        }
+
         let esb_payload_len = usb_msg.payload.len() - ESB_HEADER_SIZE;
+
         let mut esb_payload = vec![0; esb_payload_len];
         addr.copy_from_slice(
             &usb_msg.payload[ESB_HEADER_SIZE - ESB_PIPE_ADDR_SIZE..ESB_HEADER_SIZE],
         );
         esb_payload.copy_from_slice(&usb_msg.payload[ESB_HEADER_SIZE..]);
-        EsbMessage {
+
+        Ok(EsbMessage {
             address: addr,
             id: usb_msg.payload[0],
             err: usb_msg.payload[1],
             payload: esb_payload,
-        }
+        })
     }
 }
 
@@ -118,11 +125,24 @@ mod tests {
             ],
         )
         .expect("error building usb message");
-        let esb_msg = EsbMessage::from_usb_message(msg);
+        let esb_msg = EsbMessage::from_usb_message(msg).unwrap();
 
         assert_eq!(esb_msg.id, 0xAA);
         assert_eq!(esb_msg.err, 0x12);
         assert_eq!(esb_msg.address, [0xde, 0xad, 0xbe, 0xef, 0x01]);
         assert_eq!(esb_msg.payload, [0x10, 0x00, 0x11, 0x00]);
+    }
+
+    #[test]
+    fn from_usb_message_malformed_packet() {
+        let msg = UsbMessage::new(
+            30,
+            vec![
+                0xAA, 0x12, 0xde, 0xad    /* payload does not contain complete ESB package */
+            ],
+        )
+            .expect("error building usb message");
+        let result = EsbMessage::from_usb_message(msg);
+        assert_eq!(result.err(), Some(String::from("Can't build EsbMessage: Malformed USB packet")));
     }
 }

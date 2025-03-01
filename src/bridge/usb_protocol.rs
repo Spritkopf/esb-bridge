@@ -338,7 +338,7 @@ mod tests {
     #[ignore]
     /// This test needs manual interaction and a connected device.
     /// Once the test is started the "test" button on the device must be pressed within 3 seconds,
-    /// which sends a message with ID CMD_IRQ (0x80) to the host
+    /// which sends a message with ID CMD_RX (0x81) to the host
     fn irq() {
         let mut prot = UsbProtocol::new(String::from("/dev/ttyACM0")).unwrap();
 

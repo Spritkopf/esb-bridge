@@ -53,7 +53,7 @@ impl Bridge {
                             incoming_msg.id,
                             incoming_msg.payload
                         );
-                        let esb_message = EsbMessage::from_usb_message(incoming_msg);
+                        let esb_message = EsbMessage::from_usb_message(incoming_msg).unwrap();
                         log::debug!("Incoming ESB Message: ID {:02X} Payload {:?}", esb_message.id, esb_message.payload);
                         let l = thread_listeners.lock().unwrap();
                         match l.get(&esb_message.id) {
@@ -96,7 +96,7 @@ impl Bridge {
     /// Transfer an ESB message and return the answer
     pub fn transfer(&mut self, msg: EsbMessage, timeout: Duration) -> Result<EsbMessage, String> {
         match self.usb_protocol.transfer(&msg, timeout) {
-            Ok(answer) => Ok(EsbMessage::from_usb_message(answer)),
+            Ok(answer) => EsbMessage::from_usb_message(answer),
             _ => Err(String::from("Error transmitting message")),
         }
     }
