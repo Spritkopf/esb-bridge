@@ -134,7 +134,7 @@ impl UsbProtocol {
                 // Each received USB message will be analyzed; if it is an answer to a transfer message,
                 // it is returned on the RX channel. If it matches a registered listener,
                 // it will be relayed to that listeners channel instead.
-                Some(thread::spawn(move || {
+                thread::spawn(move || {
                     let mut read_buffer: Vec<u8> = vec![0; PACKET_SIZE];
 
                     struct Answer {
@@ -202,7 +202,7 @@ impl UsbProtocol {
                             }
                         }
                     }
-                })); // End of receive thread
+                }); // End of receive thread
 
                 Ok(UsbProtocol {
                     // handle,
