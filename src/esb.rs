@@ -1,3 +1,9 @@
+// ESB message byte representation
+//
+//            |----HEADER----------------|---------PAYLOAD----------------|
+// * Bytes:   |  0   |   1   | 2 3 4 5 6 | 7          ...               31|
+// * Value:   | CMD  | ERROR |   PIPE    |          DATA                  |
+ //
 use crate::bridge::{
     usb_protocol::{MessageBuilder, UsbMessage},
     CmdCodes,
@@ -9,9 +15,9 @@ const ESB_HEADER_SIZE: usize = 2 + ESB_PIPE_ADDR_SIZE;
 const ESB_MAX_PL_LEN: usize = ESB_PACKET_SIZE - ESB_HEADER_SIZE;
 
 pub struct EsbMessage {
-    pub address: [u8; 5],
     pub id: u8,
     pub err: u8,
+    pub address: [u8; 5],
     pub payload: Vec<u8>,
 }
 
@@ -26,17 +32,17 @@ impl EsbMessage {
         }
 
         Ok(EsbMessage {
-            address: target_addr,
             id: msg_id,
             err: 0,
+            address: target_addr,
             payload,
         })
     }
 
     pub fn from_usb_message(usb_msg: UsbMessage) -> Result<EsbMessage, String> {
         let mut addr = [0; ESB_PIPE_ADDR_SIZE];
-        
-        if usb_msg.payload.len() < ESB_HEADER_SIZE {
+        println!("LEN: {}", &usb_msg.payload.len());
+        if !((ESB_HEADER_SIZE..=ESB_PACKET_SIZE).contains(&usb_msg.payload.len())){
             return Err(String::from(format!("Can't build EsbMessage: Malformed USB packet")));
         }
 
@@ -49,9 +55,9 @@ impl EsbMessage {
         esb_payload.copy_from_slice(&usb_msg.payload[ESB_HEADER_SIZE..]);
 
         Ok(EsbMessage {
-            address: addr,
             id: usb_msg.payload[0],
             err: usb_msg.payload[1],
+            address: addr,
             payload: esb_payload,
         })
     }
@@ -60,8 +66,8 @@ impl EsbMessage {
 impl MessageBuilder for EsbMessage {
     fn build_message(&self) -> UsbMessage {
         let payload = [
-            self.address.clone().to_vec(),
             vec![self.id, self.err],
+            self.address.clone().to_vec(),
             self.payload.clone(),
         ]
         .concat();
@@ -93,16 +99,17 @@ mod tests {
         assert_eq!(usbmsg.err, 0x00);
         assert_eq!(
             usbmsg.payload.as_slice(),
-            [0xde, 0xad, 0xbe, 0xef, 0x00, 0x10, 0xFF, 1, 2, 3, 4, 5, 6]
+            // ID   ERR   ---  PIPELINE ADDR -------   --- PAYLOAD ---
+            [0x10, 0xFF, 0xde, 0xad, 0xbe, 0xef, 0x00, 1, 2, 3, 4, 5, 6]
         );
     }
 
     #[test]
     fn build_usb_message_no_payload() {
         let msg = EsbMessage {
-            address: [0xde, 0xad, 0xbe, 0xef, 0x00],
             id: 0x10,
             err: 0xFF,
+            address: [0xde, 0xad, 0xbe, 0xef, 0x00],
             payload: Vec::new(),
         };
 
@@ -112,7 +119,7 @@ mod tests {
         assert_eq!(usbmsg.err, 0x00);
         assert_eq!(
             usbmsg.payload.as_slice(),
-            [0xde, 0xad, 0xbe, 0xef, 0x00, 0x10, 0xFF]
+            [0x10, 0xFF, 0xde, 0xad, 0xbe, 0xef, 0x00]
         );
     }
 
@@ -121,6 +128,7 @@ mod tests {
         let msg = UsbMessage::new(
             30,
             vec![
+                // ID  ERR   ---  PIPELINE ADDR -------   ------ PAYLOAD ------
                 0xAA, 0x12, 0xde, 0xad, 0xbe, 0xef, 0x01, 0x10, 0x00, 0x11, 0x00,
             ],
         )
